@@ -47,3 +47,6 @@ Reglas clave:
 - `UNIQUE (temporada_id, jugador_id)`: un jugador, un equipo por temporada.
 - FK compuesta `(equipo_id, temporada_id)`: la temporada del vínculo es la del equipo.
 - Capitán = `equipo.capitan_id` (no es un rol almacenado).
+
+
+El modelo User del boilerplate se mapea a la tabla usuario con @@map("usuario"); los campos usan @map (password_hash, is_active…). Se renombró la tabla y sus nombres de llave con una migración manual para no perder datos y para que Prisma no detecte desviación.
