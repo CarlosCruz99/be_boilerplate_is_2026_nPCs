@@ -12,6 +12,13 @@ import type {
   MiEquipoDto,
 } from '../dto/equipo.dto.js';
 
+import type {
+  ListarEquiposQueryDto,
+  ListadoEquiposDto,
+  DetalleEquipoDto,
+} from '../dto/consulta-equipos.dto.js';
+import { calcularEdad } from '../utils/edad.js';
+
 const equipoSelect = {
   id: true,
   nombre: true,
@@ -101,5 +108,86 @@ export class EquiposService {
       throw new NotFoundException('No tienes un equipo en esta temporada.');
     const { _count, ...datos } = equipo;
     return { ...datos, totalJugadores: _count.jugadores };
+  }
+
+  async listar({
+    temporadaId,
+    estado,
+    page,
+    pageSize,
+  }: ListarEquiposQueryDto): Promise<ListadoEquiposDto> {
+    const where = { temporadaId, estado };
+    // El total y la página corresponden a la misma instantánea de lectura.
+    const [equipos, total] = await this.prisma.$transaction(
+      [
+        this.prisma.equipo.findMany({
+          where,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          orderBy: [{ creadoEn: 'desc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            nombre: true,
+            estado: true,
+            creadoEn: true,
+            capitan: { select: { nombre: true } },
+            _count: { select: { jugadores: true } },
+          },
+        }),
+        this.prisma.equipo.count({ where }),
+      ],
+      { isolationLevel: 'RepeatableRead' },
+    );
+    return {
+      items: equipos.map(({ capitan, _count, creadoEn, ...equipo }) => ({
+        ...equipo,
+        nombreCapitan: capitan.nombre,
+        totalJugadores: _count.jugadores,
+        creadoEn: creadoEn.toISOString(),
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async detalle(id: number): Promise<DetalleEquipoDto> {
+    const equipo = await this.prisma.equipo.findUnique({
+      where: { id },
+      select: {
+        ...equipoSelect,
+        creadoEn: true,
+        motivoRechazo: true,
+        capitan: { select: { nombre: true } },
+        jugadores: {
+          orderBy: { jugadorId: 'asc' },
+          select: {
+            jugador: {
+              select: {
+                id: true,
+                nombreCompleto: true,
+                fechaNacimiento: true,
+                fotoUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!equipo) throw new NotFoundException('El equipo no existe.');
+    const referencia = new Date();
+    const { capitan, jugadores, creadoEn, ...datos } = equipo;
+    return {
+      ...datos,
+      creadoEn: creadoEn.toISOString(),
+      nombreCapitan: capitan.nombre,
+      totalJugadores: jugadores.length,
+      jugadores: jugadores.map(
+        ({ jugador: { fechaNacimiento, ...jugador } }) => ({
+          ...jugador,
+          edad: calcularEdad(fechaNacimiento, referencia),
+        }),
+      ),
+    };
   }
 }
