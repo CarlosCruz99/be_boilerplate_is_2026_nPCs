@@ -1,4 +1,13 @@
-# SI Backend Boilerplate
+# Integrantes del equipo
+
+- Carlos Humberto Cruz Parada - 00013324 (Backend)
+- Diego Benjamin Hurtado Ramos - 00034124 (Frontend)
+- Jose Martin Luna Ramos – 00308324 (Frontend)
+- Francisco Javier Martinez Donado - 00073424 (QA)
+- Cristofer Enoc Melara Aldana - 00102224 (Documentación/Backend)
+- Edson Enrique Palacios Quinteros – 00376920 (Base de datos)
+
+## SI Backend Boilerplate
 
 API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con autenticación por usuario y contraseña lista para usar.
 
@@ -242,6 +251,8 @@ npm run db:reset
 ### Seed
 
 [prisma/seed.ts](prisma/seed.ts) crea un usuario de prueba mediante `upsert`, así que se puede correr las veces que haga falta:
+
+[Seed del calendario (H3): 66 partidos de prueba y consultas de verificación](docs/seed-calendario.md)
 
 | Email | Contraseña |
 |---|---|
