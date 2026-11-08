@@ -36,13 +36,13 @@ INSERT INTO jugador (id,nombre_completo,fecha_nacimiento,identificacion,foto_url
 
 -- ---------- DB-1.3 ----------
 SELECT pg_temp.debe_fallar('1.3 rol fuera del enum',
-  $q$INSERT INTO usuario(id,email,password_hash,updated_at,rol) VALUES (gen_random_uuid(),'r@x.com','h',now(),'ADMIN')$q$);
+  $q$INSERT INTO usuario(id,email,password_hash,updated_at,nombre,fecha_nacimiento,rol) VALUES (gen_random_uuid(),'r@x.com','h',now(),'Usuario prueba','2000-01-01','ADMIN')$q$);
 SELECT pg_temp.debe_fallar('1.3 nombre de 2 caracteres',
-  $q$INSERT INTO usuario(id,email,password_hash,updated_at,nombre) VALUES (gen_random_uuid(),'n@x.com','h',now(),'Ab')$q$);
+  $q$INSERT INTO usuario(id,email,password_hash,updated_at,nombre,fecha_nacimiento) VALUES (gen_random_uuid(),'n@x.com','h',now(),'Ab','2000-01-01')$q$);
 SELECT pg_temp.debe_fallar('1.3 nombre solo espacios',
-  $q$INSERT INTO usuario(id,email,password_hash,updated_at,nombre) VALUES (gen_random_uuid(),'n2@x.com','h',now(),'    ')$q$);
+  $q$INSERT INTO usuario(id,email,password_hash,updated_at,nombre,fecha_nacimiento) VALUES (gen_random_uuid(),'n2@x.com','h',now(),'    ','2000-01-01')$q$);
 SELECT pg_temp.debe_fallar('1.3 fecha de nacimiento futura',
-  $q$INSERT INTO usuario(id,email,password_hash,updated_at,fecha_nacimiento) VALUES (gen_random_uuid(),'f@x.com','h',now(),CURRENT_DATE + 1)$q$);
+  $q$INSERT INTO usuario(id,email,password_hash,updated_at,nombre,fecha_nacimiento) VALUES (gen_random_uuid(),'f@x.com','h',now(),'Usuario prueba',CURRENT_DATE + 1)$q$);
 
 -- ---------- DB-1.1 ----------
 SELECT pg_temp.debe_fallar('1.1 mismo nombre con otra capitalizacion',

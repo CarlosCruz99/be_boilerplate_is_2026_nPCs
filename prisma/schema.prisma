@@ -54,11 +54,9 @@ model User {
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  // DB-1.3. Los defaults de nombre y fechaNacimiento solo cubren al usuario
-  // existente; se quitan cuando BE-1.3 envíe estos datos desde el registro.
   rol             RolUsuario @default(JUGADOR)
-  nombre          String     @default("Usuario de prueba") @db.VarChar(120)
-  fechaNacimiento DateTime   @default(dbgenerated("'2000-01-01'::date")) @map("fecha_nacimiento") @db.Date
+  nombre          String     @db.VarChar(120)
+  fechaNacimiento DateTime   @map("fecha_nacimiento") @db.Date
 
   refreshTokens   RefreshToken[]
   equiposCapitan  Equipo[]       @relation("CapitanEquipo")

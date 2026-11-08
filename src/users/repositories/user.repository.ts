@@ -9,6 +9,8 @@ const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 export interface CreateUserData {
   email: string;
   passwordHash: string;
+  nombre: string;
+  fechaNacimiento: Date;
 }
 
 /**
@@ -31,10 +33,13 @@ export class UserRepository {
    * insert. El código P2002 de Prisma se traduce a un error de dominio para
    * que la capa de servicio no tenga que conocer los códigos del ORM.
    */
-  async create({ email, passwordHash }: CreateUserData): Promise<User> {
+  async create(
+    { email, ...profile }: CreateUserData,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<User> {
     try {
-      return await this.prisma.user.create({
-        data: { email: this.normalizeEmail(email), passwordHash },
+      return await db.user.create({
+        data: { email: this.normalizeEmail(email), ...profile, rol: 'JUGADOR' },
       });
     } catch (error) {
       if (
@@ -55,6 +60,30 @@ export class UserRepository {
     return this.prisma.user.findUnique({
       where: { email: this.normalizeEmail(email) },
     });
+  }
+
+  async findCurrentTeams(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        equiposCapitan: {
+          where: { temporada: { actual: true } },
+          select: { id: true },
+        },
+        jugador: {
+          select: {
+            equipos: {
+              where: { equipo: { temporada: { actual: true } } },
+              select: { equipoId: true },
+            },
+          },
+        },
+      },
+    });
+    const capitaneaEquipoId = user.equiposCapitan[0]?.id ?? null;
+    const equipoActualId =
+      user.jugador?.equipos[0]?.equipoId ?? capitaneaEquipoId;
+    return { equipoActualId, capitaneaEquipoId };
   }
 
   existsByEmail(email: string): Promise<boolean> {

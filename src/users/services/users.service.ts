@@ -5,7 +5,7 @@ import { UserRepository } from '@Users/repositories';
 import { EmailAlreadyTakenError } from '@Users/errors';
 import type { CreateUserDto } from '@Users/dto';
 import type { EnvConfig } from '@Config';
-import type { User } from '@PrismaClient';
+import type { Prisma, User } from '@PrismaClient';
 
 /**
  * Lógica de negocio de usuarios.
@@ -23,15 +23,26 @@ export class UsersService {
     this.saltRounds = configService.get('BCRYPT_SALT_ROUNDS', { infer: true });
   }
 
-  async create({ email, password }: CreateUserDto): Promise<User> {
+  async create(
+    { email, password, nombre, fechaNacimiento }: CreateUserDto,
+    db?: Prisma.TransactionClient,
+  ): Promise<User> {
     const passwordHash = await this.hashPassword(password);
 
     try {
-      return await this.userRepository.create({ email, passwordHash });
+      return await this.userRepository.create(
+        {
+          email,
+          passwordHash,
+          nombre,
+          fechaNacimiento: new Date(fechaNacimiento),
+        },
+        db,
+      );
     } catch (error) {
       // Traduce el error de dominio del repositorio a una excepción HTTP.
       if (error instanceof EmailAlreadyTakenError) {
-        throw new ConflictException('El email ya está registrado.');
+        throw new ConflictException('Este correo ya está registrado.');
       }
       throw error;
     }
@@ -43,6 +54,10 @@ export class UsersService {
 
   findById(id: string): Promise<User | null> {
     return this.userRepository.findById(id);
+  }
+
+  findCurrentTeams(id: string) {
+    return this.userRepository.findCurrentTeams(id);
   }
 
   hashPassword(password: string): Promise<string> {

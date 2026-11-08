@@ -365,11 +365,11 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | Método | Ruta | Auth | Código | Descripción |
 |---|---|---|---|---|
 | `GET` | `/` | — | `200` | Health check |
-| `POST` | `/users` | — | `201` | Registra un usuario con email y contraseña |
+| `POST` | `/users` | — | `201` | Registra una cuenta JUGADOR e inicia sesión |
 | `POST` | `/auth/login` | — | `200` | Inicia sesión con email y contraseña |
 | `POST` | `/auth/refresh` | — | `200` | Renueva el par de tokens |
 | `POST` | `/auth/logout` | — | `204` | Cierra la sesión |
-| `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado |
+| `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado, rol, equipo actual y capitanía |
 
 ### Ejemplos
 
@@ -380,9 +380,9 @@ BASE=http://localhost:3000/api/v1
 **Registro**
 
 ```bash
-curl -X POST $BASE/users \
+curl -i -X POST $BASE/users \
   -H 'Content-Type: application/json' \
-  -d '{"email":"nestor@example.com","password":"Str0ngPass"}'
+  -d '{"nombre":"Néstor Pérez","email":"nestor@example.com","password":"unaclave1","fechaNacimiento":"2004-05-12"}'
 ```
 
 ```jsonc
@@ -390,12 +390,12 @@ curl -X POST $BASE/users \
 {
   "id": "29bda5e8-e0c8-4ec2-bc7f-94c41c3c0140",
   "email": "nestor@example.com",
-  "isActive": true,
-  "createdAt": "2026-09-20T17:29:59.852Z"
+  "nombre": "Néstor Pérez",
+  "rol": "JUGADOR"
 }
 ```
 
-La contraseña debe tener entre 8 y 72 caracteres, con al menos una minúscula, una mayúscula y un número. Si el email ya está registrado, la respuesta es `409 Conflict`.
+La contraseña exige al menos 8 caracteres, una letra y un número, con un máximo de 72 bytes por bcrypt. El correo duplicado devuelve `409`. El registro abre sesión y entrega el mismo par de tokens que el login en los encabezados `X-Access-Token` y `X-Refresh-Token`. La vigencia en segundos está en `X-Token-Expires-In`.
 
 **Login**
 
@@ -420,6 +420,8 @@ curl -X POST $BASE/auth/login \
 ```bash
 curl $BASE/auth/me -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
+
+`equipoActualId` y `capitaneaEquipoId` se calculan para la temporada marcada como actual. Si no hay una relación en esa temporada, el campo correspondiente vale `null`.
 
 **Renovar tokens**
 
