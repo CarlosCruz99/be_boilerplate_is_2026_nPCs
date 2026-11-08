@@ -243,6 +243,8 @@ npm run db:reset
 
 [prisma/seed.ts](prisma/seed.ts) crea un usuario de prueba mediante `upsert`, así que se puede correr las veces que haga falta:
 
+[Seed del calendario (H3): 66 partidos de prueba y consultas de verificación](docs/seed-calendario.md)
+
 | Email | Contraseña |
 |---|---|
 | `demo@example.com` | `Demo1234!` |
