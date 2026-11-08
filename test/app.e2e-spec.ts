@@ -386,6 +386,98 @@ describe('API (e2e)', () => {
       .expect(400);
   });
 
+  it('H2: lista, pagina y consulta el detalle exclusivamente como organizador', async () => {
+    const organizador = await login('organizador@liga.test');
+    const arbitro = await login('arbitro1@liga.test');
+    const equipo = await nuevoEquipo();
+    const listado = `${api}/equipos?temporadaId=${equipo.temporadaId}`;
+    const detalle = `${api}/equipos/${equipo.id}`;
+    for (const ruta of [listado, detalle]) {
+      await client().get(ruta).expect(401);
+      for (const token of [equipo.token, arbitro]) {
+        await client().get(ruta).auth(token, { type: 'bearer' }).expect(403);
+      }
+    }
+    const primera = await client()
+      .get(`${listado}&pageSize=1`)
+      .auth(organizador, { type: 'bearer' })
+      .expect(200);
+    expect(primera.body).toMatchObject({ page: 1, pageSize: 1 });
+    expect(primera.body.items).toHaveLength(1);
+    expect(primera.body.total).toBeGreaterThan(1);
+    expect(primera.body.items[0]).toEqual({
+      id: expect.any(Number),
+      nombre: expect.any(String),
+      estado: 'PENDIENTE',
+      nombreCapitan: expect.any(String),
+      totalJugadores: expect.any(Number),
+      creadoEn: expect.any(String),
+    });
+    const segunda = await client()
+      .get(`${listado}&pageSize=1&page=2`)
+      .auth(organizador, { type: 'bearer' })
+      .expect(200);
+    expect(segunda.body.total).toBe(primera.body.total);
+    expect(segunda.body.items[0].id).not.toBe(primera.body.items[0].id);
+    const rechazados = await client()
+      .get(`${listado}&estado=RECHAZADO`)
+      .auth(organizador, { type: 'bearer' })
+      .expect(200);
+    const esperados = await db.query(
+      'SELECT id FROM equipo WHERE temporada_id=$1 AND estado=$2 ORDER BY creado_en DESC, id ASC LIMIT 20',
+      [equipo.temporadaId, 'RECHAZADO'],
+    );
+    expect(
+      rechazados.body.items.map((item: { id: number }) => item.id),
+    ).toEqual(esperados.rows.map((row: { id: number }) => row.id));
+    const vacio = await client()
+      .get(`${api}/equipos?temporadaId=2147483647`)
+      .auth(organizador, { type: 'bearer' })
+      .expect(200);
+    expect(vacio.body).toEqual({ items: [], total: 0, page: 1, pageSize: 20 });
+    const respuesta = await client()
+      .get(detalle)
+      .auth(organizador, { type: 'bearer' })
+      .expect(200);
+    expect(respuesta.body).toMatchObject({
+      id: equipo.id,
+      temporadaId: equipo.temporadaId,
+      estado: 'PENDIENTE',
+      jugadores: [],
+      totalJugadores: 0,
+    });
+    for (const query of [
+      '',
+      '?temporadaId=0',
+      '?temporadaId=2&estado=OTRO',
+      '?temporadaId=2&page=0',
+      '?temporadaId=2&pageSize=51',
+      '?temporadaId=2&page=1.5',
+    ]) {
+      await client()
+        .get(`${api}/equipos${query}`)
+        .auth(organizador, { type: 'bearer' })
+        .expect(400);
+    }
+    await client()
+      .get(`${api}/equipos/0`)
+      .auth(organizador, { type: 'bearer' })
+      .expect(400);
+    await client()
+      .get(`${api}/equipos/2147483647`)
+      .auth(organizador, { type: 'bearer' })
+      .expect(404);
+    await client()
+      .get(`${api}/equipos/mi-equipo?temporadaId=${equipo.temporadaId}`)
+      .auth(equipo.token, { type: 'bearer' })
+      .expect(200);
+    const docs = await client().get('/api/docs-json').expect(200);
+    expect(docs.body.paths[`${api}/equipos`].get).toBeDefined();
+    expect(
+      docs.body.paths[`${api}/equipos/{id}`].get.responses['404'],
+    ).toBeDefined();
+  });
+
   it('agrega, descarga, lista y quita una ficha del equipo pendiente', async () => {
     const equipo = await nuevoEquipo();
     const datos = datosFicha();
@@ -404,6 +496,26 @@ describe('API (e2e)', () => {
       fotoUrl: `/uploads/jugadores/${id}.png`,
       usuarioId: null,
     });
+    const organizador = await login('organizador@liga.test');
+    const revision = await client()
+      .get(`${api}/equipos/${equipo.id}`)
+      .auth(organizador, { type: 'bearer' })
+      .expect(200);
+    expect(revision.body.jugadores).toEqual([
+      {
+        id,
+        nombreCompleto: datos.nombreCompleto,
+        edad: expect.any(Number),
+        fotoUrl,
+      },
+    ]);
+    expect(revision.body.totalJugadores).toBe(1);
+    const fotoOrganizador = await client()
+      .get(fotoUrl)
+      .auth(organizador, { type: 'bearer' })
+      .expect('Content-Type', /image\/png/)
+      .expect(200);
+    expect((fotoOrganizador.body as Buffer).equals(exacta)).toBe(true);
     const otraCuenta = await register();
     await client().get(fotoUrl).expect(401);
     await client()

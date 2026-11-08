@@ -152,7 +152,7 @@ export class FotosJugadorController {
   @Header('X-Content-Type-Options', 'nosniff')
   @ApiOperation({
     summary:
-      'Descarga la foto de una ficha propia o de un equipo que se capitanea',
+      'Descarga una foto propia, del equipo capitaneado o para revisión del organizador',
   })
   @ApiParam({ name: 'archivo', type: String, example: '120.jpg' })
   @ApiProduces('image/jpeg', 'image/png')
@@ -165,6 +165,6 @@ export class FotosJugadorController {
     @CurrentUser() user: User,
     @Param('archivo') archivo: string,
   ): Promise<StreamableFile> {
-    return this.fotos.descargar(archivo, user.id);
+    return this.fotos.descargar(archivo, user.id, user.rol);
   }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -8,6 +8,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
@@ -20,6 +21,12 @@ import {
   MiEquipoDto,
   MiEquipoQueryDto,
 } from '../dto/equipo.dto.js';
+import {
+  ListarEquiposQueryDto,
+  ListadoEquiposDto,
+  DetalleEquipoParamsDto,
+  DetalleEquipoDto,
+} from '../dto/consulta-equipos.dto.js';
 import { EquiposService } from '../services/equipos.service.js';
 
 @ApiTags('equipos')
@@ -62,5 +69,27 @@ export class EquiposController {
     @Query() query: MiEquipoQueryDto,
   ): Promise<MiEquipoDto> {
     return this.equipos.miEquipo(user.id, query.temporadaId);
+  }
+
+  @Get()
+  @Roles('ORGANIZADOR')
+  @ApiOperation({
+    summary: 'Lista equipos por temporada y estado para revisión',
+  })
+  @ApiOkResponse({ type: ListadoEquiposDto })
+  listar(@Query() query: ListarEquiposQueryDto): Promise<ListadoEquiposDto> {
+    return this.equipos.listar(query);
+  }
+
+  @Get(':id')
+  @Roles('ORGANIZADOR')
+  @ApiOperation({
+    summary: 'Consulta un equipo y sus jugadores con edad calculada',
+  })
+  @ApiParam({ name: 'id', schema: { type: 'integer', minimum: 1 } })
+  @ApiOkResponse({ type: DetalleEquipoDto })
+  @ApiNotFoundResponse({ description: 'El equipo no existe.' })
+  detalle(@Param() { id }: DetalleEquipoParamsDto): Promise<DetalleEquipoDto> {
+    return this.equipos.detalle(id);
   }
 }
