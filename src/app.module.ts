@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '@Auth/guards';
 import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { validateEnv } from '@Config';
+import { CalendarioModule } from './calendario/calendario.module.js';
 import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
 
 @Module({
@@ -20,6 +21,7 @@ import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
     HealthModule,
     AuthModule,
     InscripcionesModule,
+    CalendarioModule,
   ],
   providers: [
     {
