@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { mkdir, open, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EnvConfig } from '@Config';
+import type { RolUsuario } from '@PrismaClient';
 import { PrismaService } from '@Prisma/services';
 
 export type FotoJugador = { extension: 'jpg' | 'png'; buffer: Buffer };
@@ -62,7 +63,11 @@ export class FotosJugadorService {
     }
   }
 
-  async descargar(archivo: string, usuarioId: string): Promise<StreamableFile> {
+  async descargar(
+    archivo: string,
+    usuarioId: string,
+    rol?: RolUsuario,
+  ): Promise<StreamableFile> {
     if (!/^[1-9]\d*\.(jpg|png)$/.test(archivo)) {
       throw new NotFoundException('La foto no existe.');
     }
@@ -72,6 +77,7 @@ export class FotosJugadorService {
         OR: [
           { usuarioId },
           { equipos: { some: { equipo: { capitanId: usuarioId } } } },
+          ...(rol === 'ORGANIZADOR' ? [{ equipos: { some: {} } }] : []),
         ],
       },
       select: { id: true },
