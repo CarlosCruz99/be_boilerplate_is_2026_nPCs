@@ -192,13 +192,13 @@ docker compose up --build            # todo, reconstruyendo la imagen
 docker compose ps                    # estado y healthchecks
 docker compose logs -f api           # logs de la API
 docker compose down                  # parar (los datos se conservan)
-docker compose down -v               # parar y BORRAR los datos
+docker compose down -v               # parar y borrar la base y las fotos locales
 
 # Abrir una consola psql dentro del contenedor
 docker compose exec postgres psql -U postgres -d si_be_boilerplate
 ```
 
-**Resetear la base desde cero:**
+**Resetear la base y las fotos locales desde cero:**
 
 ```bash
 docker compose down -v && docker compose up -d postgres
@@ -247,6 +247,82 @@ npm run db:reset
 |---|---|
 | `demo@example.com` | `Demo1234!` |
 
+## Datos de prueba de H1 (DB-1.2)
+
+Se cargan con `npm run db:seed` (o `docker compose exec api npx prisma db seed`). Es idempotente: se puede correr varias veces y deja los mismos registros.
+
+**Contraseña de todas las cuentas de H1:** `Liga2026!` (el usuario demo del boilerplate sigue con `Demo1234!`).
+
+### Cuentas
+
+| Rol | Correo | Nota |
+|---|---|---|
+| Organizador | `organizador@liga.test` | 1 cuenta |
+| Árbitro | `arbitro1@liga.test` … `arbitro4@liga.test` | 4 cuentas |
+| Jugador con ficha ligada | `jugador01@liga.test` … `jugador12@liga.test` | una por cada equipo Inscrito de Apertura 2026 (jugador.usuario_id) |
+| Capitán | `capitan.<equipo>.<temporada>@liga.test` | una cuenta por equipo, rol JUGADOR; ver tabla de equipos |
+
+### Temporadas y equipos
+
+**Apertura 2026** · 2026-11-07 a 2027-01-16 · actual = true · inscripción cerrada · max_equipos = 12
+
+| Equipo | Estado | Jugadores | Capitán |
+|---|---|---|---|
+| Tigres FC | INSCRITO | 7 | `capitan.tigres-fc.ap26@liga.test` |
+| Leones FC | INSCRITO | 15 | `capitan.leones-fc.ap26@liga.test` |
+| Águilas FC | INSCRITO | 9 | `capitan.aguilas-fc.ap26@liga.test` |
+| Pumas FC | INSCRITO | 10 | `capitan.pumas-fc.ap26@liga.test` |
+| Halcones FC | INSCRITO | 11 | `capitan.halcones-fc.ap26@liga.test` |
+| Lobos FC | INSCRITO | 12 | `capitan.lobos-fc.ap26@liga.test` |
+| Osos FC | INSCRITO | 13 | `capitan.osos-fc.ap26@liga.test` |
+| Toros FC | INSCRITO | 14 | `capitan.toros-fc.ap26@liga.test` |
+| Cobras FC | INSCRITO | 8 | `capitan.cobras-fc.ap26@liga.test` |
+| Jaguares FC | INSCRITO | 10 | `capitan.jaguares-fc.ap26@liga.test` |
+| Pirañas FC | INSCRITO | 12 | `capitan.piranas-fc.ap26@liga.test` |
+| Rayos FC | INSCRITO | 9 | `capitan.rayos-fc.ap26@liga.test` |
+| Panteras FC | PENDIENTE | 9 | `capitan.panteras-fc.ap26@liga.test` |
+
+**Clausura 2027** · 2027-03-01 a 2027-06-30 · actual = false · inscripción abierta · max_equipos = 12
+
+| Equipo | Estado | Jugadores | Capitán |
+|---|---|---|---|
+| Dragones FC | INSCRITO | 8 | `capitan.dragones-fc.cl27@liga.test` |
+| Búhos FC | INSCRITO | 9 | `capitan.buhos-fc.cl27@liga.test` |
+| Zorros FC | INSCRITO | 10 | `capitan.zorros-fc.cl27@liga.test` |
+| Delfines FC | INSCRITO | 11 | `capitan.delfines-fc.cl27@liga.test` |
+| Tiburones FC | INSCRITO | 8 | `capitan.tiburones-fc.cl27@liga.test` |
+| Gavilanes FC | INSCRITO | 9 | `capitan.gavilanes-fc.cl27@liga.test` |
+| Venados FC | INSCRITO | 12 | `capitan.venados-fc.cl27@liga.test` |
+| Coyotes FC | INSCRITO | 10 | `capitan.coyotes-fc.cl27@liga.test` |
+| Cóndores FC | INSCRITO | 8 | `capitan.condores-fc.cl27@liga.test` |
+| Mapaches FC | INSCRITO | 9 | `capitan.mapaches-fc.cl27@liga.test` |
+| Alacranes FC | PENDIENTE | 9 | `capitan.alacranes-fc.cl27@liga.test` |
+| Colibríes FC | PENDIENTE | 5 | `capitan.colibries-fc.cl27@liga.test` |
+| Tucanes FC | PENDIENTE | 8 | `capitan.tucanes-fc.cl27@liga.test` |
+| Iguanas FC | RECHAZADO | 8 | `capitan.iguanas-fc.cl27@liga.test` |
+
+**Clausura 2025** · 2025-03-01 a 2025-06-30 · actual = false · inscripción cerrada · max_equipos = 12
+
+| Equipo | Estado | Jugadores | Capitán |
+|---|---|---|---|
+| Tigres FC | INSCRITO | 8 | `capitan.tigres-fc.cl25@liga.test` |
+| Leones FC | INSCRITO | 8 | `capitan.leones-fc.cl25@liga.test` |
+| Águilas FC | INSCRITO | 8 | `capitan.aguilas-fc.cl25@liga.test` |
+| Pumas FC | INSCRITO | 8 | `capitan.pumas-fc.cl25@liga.test` |
+
+### Casos especiales
+
+- **Cumple 16 años hoy:** SEED-0131 (Panteras FC, Apertura 2026). La fecha se recalcula en cada corrida.
+- **Pendiente con 5 jugadores:** Colibríes FC (Clausura 2027). **Pendiente con un jugador de 15 años:** Tucanes FC (Clausura 2027). **Rechazado con motivo:** Iguanas FC (Clausura 2027).
+- **Temporada completa:** Apertura 2026 ya tiene 12 Inscritos; Panteras FC queda Pendiente para probar "La temporada está completa.".
+- **Aislamiento por temporada:** Tigres FC, Leones FC, Águilas FC y Pumas FC existen en Apertura 2026 y en Clausura 2025.
+- **Probar la vinculación de ficha (BE-1.4):** crea una cuenta nueva y vincula una ficha libre, por ejemplo la identificación SEED-0100 con su fecha de nacimiento (consúltala en la base).
+- Las fotos apuntan a `/uploads/seed/jugador-ejemplo.png`; coloca una imagen de ejemplo en esa ruta si el frontend las muestra.
+
+Las canchas, el calendario y los pagos de prueba los cargan DB-3.2 y DB-1.4.
+
+
+
 ---
 
 ## Autenticación
@@ -289,11 +365,22 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | Método | Ruta | Auth | Código | Descripción |
 |---|---|---|---|---|
 | `GET` | `/` | — | `200` | Health check |
-| `POST` | `/users` | — | `201` | Registra un usuario con email y contraseña |
+| `POST` | `/users` | — | `201` | Registra una cuenta JUGADOR e inicia sesión |
 | `POST` | `/auth/login` | — | `200` | Inicia sesión con email y contraseña |
 | `POST` | `/auth/refresh` | — | `200` | Renueva el par de tokens |
 | `POST` | `/auth/logout` | — | `204` | Cierra la sesión |
-| `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado |
+| `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado, rol, equipo actual y capitanía |
+| `GET` | `/temporadas` | Bearer | `200` | Lista temporadas. Filtro opcional `inscripcionAbierta=true\|false` |
+| `POST` | `/equipos` | JUGADOR | `201` | Inscribe un equipo pendiente en una temporada abierta |
+| `GET` | `/equipos/mi-equipo?temporadaId=2` | Capitán | `200` | Consulta estado, motivo de rechazo y contador |
+| `POST` | `/equipos/{equipoId}/jugadores` | Capitán | `201` | Agrega una ficha con foto JPG o PNG en multipart |
+| `GET` | `/equipos/{equipoId}/jugadores` | Capitán | `200` | Lista la plantilla del equipo |
+| `DELETE` | `/equipos/{equipoId}/jugadores/{jugadorId}` | Capitán | `204` | Quita una ficha de un equipo pendiente |
+| `POST` | `/jugadores/vincular` | JUGADOR | `200` | Vincula una ficha por identificación y fecha de nacimiento |
+
+La foto de una ficha nueva se guarda bajo `UPLOADS_DIR` (por defecto `uploads`). En Docker Compose el volumen `uploads` conserva los archivos. Para leer `fotoUrl` se envía el Bearer de la cuenta vinculada o de un capitán de la ficha. La ruta de descarga comienza en `/uploads/jugadores/`.
+
+Para ejecutar `npm run test:e2e`, apunta `DATABASE_URL` a una base de pruebas descartable, configura `JWT_SECRET` y ejecuta `npm run prisma:deploy` y `npm run db:seed`. Las pruebas crean cuentas, equipos y fichas de prueba.
 
 ### Ejemplos
 
@@ -304,9 +391,9 @@ BASE=http://localhost:3000/api/v1
 **Registro**
 
 ```bash
-curl -X POST $BASE/users \
+curl -i -X POST $BASE/users \
   -H 'Content-Type: application/json' \
-  -d '{"email":"nestor@example.com","password":"Str0ngPass"}'
+  -d '{"nombre":"Néstor Pérez","email":"nestor@example.com","password":"unaclave1","fechaNacimiento":"2004-05-12"}'
 ```
 
 ```jsonc
@@ -314,12 +401,12 @@ curl -X POST $BASE/users \
 {
   "id": "29bda5e8-e0c8-4ec2-bc7f-94c41c3c0140",
   "email": "nestor@example.com",
-  "isActive": true,
-  "createdAt": "2026-09-20T17:29:59.852Z"
+  "nombre": "Néstor Pérez",
+  "rol": "JUGADOR"
 }
 ```
 
-La contraseña debe tener entre 8 y 72 caracteres, con al menos una minúscula, una mayúscula y un número. Si el email ya está registrado, la respuesta es `409 Conflict`.
+La contraseña exige al menos 8 caracteres, una letra y un número, con un máximo de 72 bytes por bcrypt. El correo duplicado devuelve `409`. El registro abre sesión y entrega el mismo par de tokens que el login en los encabezados `X-Access-Token` y `X-Refresh-Token`. La vigencia en segundos está en `X-Token-Expires-In`.
 
 **Login**
 
@@ -344,6 +431,10 @@ curl -X POST $BASE/auth/login \
 ```bash
 curl $BASE/auth/me -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
+
+`equipoActualId` y `capitaneaEquipoId` se calculan para la temporada marcada como actual. Si no hay una relación en esa temporada, el campo correspondiente vale `null`.
+
+Al vincular una ficha, la respuesta usa su inscripción de la temporada actual si existe, o la más reciente por fecha de inicio. Si la ficha no está en ninguna plantilla, `equipoId` y `temporadaId` valen `null`.
 
 **Renovar tokens**
 

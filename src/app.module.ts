@@ -5,8 +5,8 @@ import { AuthModule } from '@Auth';
 import { JwtAuthGuard } from '@Auth/guards';
 import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
-import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
 
 @Module({
   imports: [
@@ -18,8 +18,8 @@ import { validateEnv } from '@Config';
     }),
     PrismaModule,
     HealthModule,
-    UsersModule,
     AuthModule,
+    InscripcionesModule,
   ],
   providers: [
     {

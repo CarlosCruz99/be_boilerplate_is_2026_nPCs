@@ -1,15 +1,19 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import { isUUID } from 'class-validator';
 import { UsersService } from '@Users/services';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
+import { ROLES_KEY } from '../decorators/roles.decorator.js';
 import type { RequestWithUser } from '../decorators/current-user.decorator.js';
 import type { AccessTokenPayload } from '@Auth/types';
+import type { RolUsuario } from '@PrismaClient';
 
 /**
  * Guard global: valida el Bearer token y carga el usuario en el request.
@@ -30,42 +34,48 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (isPublic) return true;
-
+    const targets = [context.getHandler(), context.getClass()];
+    const isPublic = this.reflector.getAllAndOverride<boolean>(
+      IS_PUBLIC_KEY,
+      targets,
+    );
+    const roles = this.reflector.getAllAndOverride<RolUsuario[]>(
+      ROLES_KEY,
+      targets,
+    );
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const token = this.extractBearerToken(request.headers.authorization);
+    const userId = token && (await this.verifyToken(token));
+    const user = userId ? await this.usersService.findById(userId) : null;
 
-    if (!token) {
-      throw new UnauthorizedException('Falta el token de acceso.');
+    if (!user?.isActive) {
+      if (isPublic && !roles?.length) return true;
+      throw new UnauthorizedException('Sesión no válida. Inicia sesión.');
     }
 
-    let payload: AccessTokenPayload;
-    try {
-      payload = await this.jwtService.verifyAsync<AccessTokenPayload>(token);
-    } catch {
-      // Cubre firma inválida, token expirado y token malformado por igual:
-      // no conviene decirle al cliente cuál de los tres fue.
-      throw new UnauthorizedException('Token de acceso inválido o expirado.');
-    }
-
-    // Se relee el usuario en cada request para que una cuenta desactivada o
-    // eliminada deje de funcionar sin esperar a que expire el token.
-    const user = await this.usersService.findById(payload.sub);
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('La cuenta no existe o está inactiva.');
+    if (roles?.length && !roles.includes(user.rol)) {
+      throw new ForbiddenException('No tienes permiso para esta acción.');
     }
 
     request.user = user;
     return true;
   }
 
+  private async verifyToken(token: string): Promise<string | null> {
+    try {
+      const { sub } = await this.jwtService.verifyAsync<AccessTokenPayload>(
+        token,
+        {
+          algorithms: ['HS256'],
+        },
+      );
+      return isUUID(sub) ? sub : null;
+    } catch {
+      return null;
+    }
+  }
+
   private extractBearerToken(header: string | undefined): string | null {
-    if (!header) return null;
-    const [scheme, token] = header.split(' ');
-    return scheme?.toLowerCase() === 'bearer' && token ? token : null;
+    return /^Bearer ([^\s]+)$/i.exec(header ?? '')?.[1] ?? null;
   }
 }

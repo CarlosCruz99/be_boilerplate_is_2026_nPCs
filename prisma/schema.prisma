@@ -30,17 +30,40 @@ datasource db {
   provider = "postgresql"
 }
 
+enum RolUsuario {
+  JUGADOR
+  ARBITRO
+  ORGANIZADOR
+
+  @@map("rol_usuario")
+}
+
+enum EstadoEquipo {
+  PENDIENTE
+  INSCRITO
+  RECHAZADO
+
+  @@map("estado_equipo")
+}
+
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id           String      @id @default(uuid()) @db.Uuid
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  isActive     Boolean     @default(true) @map("is_active")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
+  rol             RolUsuario @default(JUGADOR)
+  nombre          String     @db.VarChar(120)
+  fechaNacimiento DateTime   @map("fecha_nacimiento") @db.Date
 
-  @@map("users")
+  refreshTokens   RefreshToken[]
+  equiposCapitan  Equipo[]       @relation("CapitanEquipo")
+  equiposValidados Equipo[]      @relation("ValidadorEquipo")
+  jugador         Jugador?
+
+  @@map("usuario")
 }
 
 model RefreshToken {
@@ -59,4 +82,79 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// H1: inscripción de equipos y jugadores (DB-1.1, DB-2.1)
+//
+// Lo que Prisma no expresa vive en el .sql de la migración:
+//  - índice parcial ux_temporada_actual (una sola temporada con actual = TRUE)
+//  - índice uq_equipo_nombre_temporada con lower(nombre)
+//  - CHECK de fechas, max_equipos, nombre/nacimiento de usuario y ck_equipo_validacion
+// ---------------------------------------------------------------------------
+
+model Temporada {
+  id                 Int      @id @default(autoincrement())
+  nombre             String   @unique @db.VarChar(80)
+  fechaInicio        DateTime @map("fecha_inicio") @db.Date
+  fechaFin           DateTime @map("fecha_fin") @db.Date
+  maxEquipos         Int      @default(12) @map("max_equipos") @db.SmallInt
+  inscripcionAbierta Boolean  @default(true) @map("inscripcion_abierta")
+  actual             Boolean  @default(false)
+
+  equipos Equipo[]
+
+  @@map("temporada")
+}
+
+model Equipo {
+  id          Int          @id @default(autoincrement())
+  nombre      String       @db.VarChar(50)
+  temporadaId Int          @map("temporada_id")
+  capitanId   String       @map("capitan_id") @db.Uuid
+  estado      EstadoEquipo @default(PENDIENTE)
+  creadoEn    DateTime     @default(now()) @map("creado_en") @db.Timestamptz(3)
+
+  // DB-2.1
+  motivoRechazo   String?   @map("motivo_rechazo")
+  validadoPor     String?   @map("validado_por") @db.Uuid
+  fechaValidacion DateTime? @map("fecha_validacion") @db.Timestamptz(3)
+
+  temporada Temporada @relation(fields: [temporadaId], references: [id])
+  capitan   User      @relation("CapitanEquipo", fields: [capitanId], references: [id])
+  validador User? @relation("ValidadorEquipo", fields: [validadoPor], references: [id], onDelete: Restrict)
+  jugadores EquipoJugador[]
+
+  @@unique([id, temporadaId])
+  @@unique([temporadaId, capitanId])
+  @@index([temporadaId, estado], map: "ix_equipo_temporada_estado")
+  @@map("equipo")
+}
+
+model Jugador {
+  id              Int      @id @default(autoincrement())
+  nombreCompleto  String   @map("nombre_completo") @db.VarChar(120)
+  fechaNacimiento DateTime @map("fecha_nacimiento") @db.Date
+  identificacion  String   @unique @db.VarChar(20)
+  fotoUrl         String   @map("foto_url")
+  usuarioId       String?  @unique @map("usuario_id") @db.Uuid
+
+  usuario User?           @relation(fields: [usuarioId], references: [id])
+  equipos EquipoJugador[]
+
+  @@map("jugador")
+}
+
+model EquipoJugador {
+  equipoId    Int @map("equipo_id")
+  jugadorId   Int @map("jugador_id")
+  temporadaId Int @map("temporada_id")
+
+  jugador Jugador @relation(fields: [jugadorId], references: [id])
+  equipo  Equipo  @relation(fields: [equipoId, temporadaId], references: [id, temporadaId], onDelete: Cascade)
+
+  @@id([equipoId, jugadorId])
+  @@unique([temporadaId, jugadorId])
+  @@index([equipoId], map: "ix_equipo_jugador_equipo")
+  @@map("equipo_jugador")
 }

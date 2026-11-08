@@ -1,18 +1,21 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Res } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { Public } from '@Auth/decorators';
-import { UsersService } from '@Users/services';
-import { CreateUserDto, UserResponseDto } from '@Users/dto';
+import type { Response } from 'express';
+import { Public } from '../../auth/decorators/public.decorator.js';
+import { AuthService } from '../../auth/services/auth.service.js';
+import { CreateUserDto } from '@Users/dto';
+import { RegisteredUserDto } from '../dto/registered-user.dto.js';
 
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly authService: AuthService) {}
 
   /**
    * Registro. Crear un usuario es crear un recurso, así que es un POST a la
@@ -21,10 +24,38 @@ export class UsersController {
   @Public()
   @Post()
   @ApiOperation({ summary: 'Registra un nuevo usuario' })
-  @ApiCreatedResponse({ type: UserResponseDto })
-  @ApiConflictResponse({ description: 'El nombre de usuario ya está en uso.' })
-  async create(@Body() dto: CreateUserDto): Promise<UserResponseDto> {
-    const user = await this.usersService.create(dto);
-    return UserResponseDto.fromEntity(user);
+  @ApiCreatedResponse({
+    type: RegisteredUserDto,
+    headers: {
+      'X-Access-Token': {
+        description: 'JWT de acceso.',
+        schema: { type: 'string' },
+      },
+      'X-Refresh-Token': {
+        description: 'Token de renovación.',
+        schema: { type: 'string' },
+      },
+      'X-Token-Expires-In': {
+        description: 'Vigencia del JWT en segundos.',
+        schema: { type: 'integer' },
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'Datos inválidos o campo no permitido.',
+  })
+  @ApiConflictResponse({ description: 'Este correo ya está registrado.' })
+  async create(
+    @Body() dto: CreateUserDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<RegisteredUserDto> {
+    const { user, tokens } = await this.authService.register(dto);
+    response.set({
+      'Cache-Control': 'no-store',
+      'X-Access-Token': tokens.accessToken,
+      'X-Refresh-Token': tokens.refreshToken,
+      'X-Token-Expires-In': String(tokens.expiresIn),
+    });
+    return RegisteredUserDto.fromEntity(user);
   }
 }
