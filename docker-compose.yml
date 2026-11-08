@@ -50,8 +50,11 @@ services:
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
     ports:
       - '${PORT:-3000}:3000'
+    volumes:
+      - uploads:/app/uploads
     # Aplica las migraciones pendientes antes de levantar el servidor.
     command: sh -c "npx prisma migrate deploy && node dist/main.js"
 
 volumes:
   pgdata:
+  uploads:

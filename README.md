@@ -192,13 +192,13 @@ docker compose up --build            # todo, reconstruyendo la imagen
 docker compose ps                    # estado y healthchecks
 docker compose logs -f api           # logs de la API
 docker compose down                  # parar (los datos se conservan)
-docker compose down -v               # parar y BORRAR los datos
+docker compose down -v               # parar y borrar la base y las fotos locales
 
 # Abrir una consola psql dentro del contenedor
 docker compose exec postgres psql -U postgres -d si_be_boilerplate
 ```
 
-**Resetear la base desde cero:**
+**Resetear la base y las fotos locales desde cero:**
 
 ```bash
 docker compose down -v && docker compose up -d postgres
@@ -370,6 +370,16 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `POST` | `/auth/refresh` | — | `200` | Renueva el par de tokens |
 | `POST` | `/auth/logout` | — | `204` | Cierra la sesión |
 | `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado, rol, equipo actual y capitanía |
+| `GET` | `/temporadas` | Bearer | `200` | Lista temporadas. Filtro opcional `inscripcionAbierta=true\|false` |
+| `POST` | `/equipos` | JUGADOR | `201` | Inscribe un equipo pendiente en una temporada abierta |
+| `GET` | `/equipos/mi-equipo?temporadaId=2` | Capitán | `200` | Consulta estado, motivo de rechazo y contador |
+| `POST` | `/equipos/{equipoId}/jugadores` | Capitán | `201` | Agrega una ficha con foto JPG o PNG en multipart |
+| `GET` | `/equipos/{equipoId}/jugadores` | Capitán | `200` | Lista la plantilla del equipo |
+| `DELETE` | `/equipos/{equipoId}/jugadores/{jugadorId}` | Capitán | `204` | Quita una ficha de un equipo pendiente |
+
+La foto de una ficha nueva se guarda bajo `UPLOADS_DIR` (por defecto `uploads`). En Docker Compose el volumen `uploads` conserva los archivos. Para leer `fotoUrl` se envía el Bearer de la cuenta vinculada o de un capitán de la ficha. La ruta de descarga comienza en `/uploads/jugadores/`.
+
+Para ejecutar `npm run test:e2e`, apunta `DATABASE_URL` a una base de pruebas descartable, configura `JWT_SECRET` y ejecuta `npm run prisma:deploy` y `npm run db:seed`. Las pruebas crean cuentas, equipos y fichas de prueba.
 
 ### Ejemplos
 
