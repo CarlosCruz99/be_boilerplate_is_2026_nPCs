@@ -376,6 +376,7 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `POST` | `/equipos/{equipoId}/jugadores` | Capitán | `201` | Agrega una ficha con foto JPG o PNG en multipart |
 | `GET` | `/equipos/{equipoId}/jugadores` | Capitán | `200` | Lista la plantilla del equipo |
 | `DELETE` | `/equipos/{equipoId}/jugadores/{jugadorId}` | Capitán | `204` | Quita una ficha de un equipo pendiente |
+| `POST` | `/jugadores/vincular` | JUGADOR | `200` | Vincula una ficha por identificación y fecha de nacimiento |
 
 La foto de una ficha nueva se guarda bajo `UPLOADS_DIR` (por defecto `uploads`). En Docker Compose el volumen `uploads` conserva los archivos. Para leer `fotoUrl` se envía el Bearer de la cuenta vinculada o de un capitán de la ficha. La ruta de descarga comienza en `/uploads/jugadores/`.
 
@@ -432,6 +433,8 @@ curl $BASE/auth/me -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 `equipoActualId` y `capitaneaEquipoId` se calculan para la temporada marcada como actual. Si no hay una relación en esa temporada, el campo correspondiente vale `null`.
+
+Al vincular una ficha, la respuesta usa su inscripción de la temporada actual si existe, o la más reciente por fecha de inicio. Si la ficha no está en ninguna plantilla, `equipoId` y `temporadaId` valen `null`.
 
 **Renovar tokens**
 

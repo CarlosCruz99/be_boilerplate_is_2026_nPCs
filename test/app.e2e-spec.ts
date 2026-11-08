@@ -120,6 +120,17 @@ describe('API (e2e)', () => {
       .field(datos);
   }
 
+  const rutaVincular = `${api}/jugadores/vincular`;
+  function vincular(
+    token: string,
+    { identificacion, fechaNacimiento }: ReturnType<typeof datosFicha>,
+  ) {
+    return client()
+      .post(rutaVincular)
+      .auth(token, { type: 'bearer' })
+      .send({ identificacion, fechaNacimiento });
+  }
+
   it('mantiene el health check público', async () => {
     await client()
       .get(api)
@@ -634,5 +645,195 @@ describe('API (e2e)', () => {
       await db.query(`DROP TRIGGER IF EXISTS ${nombre} ON equipo_jugador`);
       await db.query(`DROP FUNCTION ${nombre}()`);
     }
+  });
+
+  it('vincula una ficha con preferencia por la temporada actual y actualiza auth/me', async () => {
+    const futuro = await nuevoEquipo();
+    const capitan = await login('capitan.panteras-fc.ap26@liga.test');
+    const { id: temporadaId } = (await temporadas(capitan)).find(
+      (season) => season.actual,
+    )!;
+    const propio = await client()
+      .get(`${api}/equipos/mi-equipo?temporadaId=${temporadaId}`)
+      .auth(capitan, { type: 'bearer' })
+      .expect(200);
+    const { id: equipoId } = propio.body as { id: number };
+    const datos = datosFicha();
+    const alta = await agregar(equipoId, capitan, datos)
+      .attach('foto', png, 'jugadora.png')
+      .expect(201);
+    const { id: jugadorId, fotoUrl } = alta.body as {
+      id: number;
+      fotoUrl: string;
+    };
+    try {
+      await agregar(futuro.id, futuro.token, datos)
+        .attach('foto', png, 'jugadora.png')
+        .expect(201);
+      const token = await register();
+      await vincular(token, datos).expect(200, {
+        jugadorId,
+        equipoId,
+        temporadaId,
+      });
+      const me = await client()
+        .get(`${api}/auth/me`)
+        .auth(token, { type: 'bearer' })
+        .expect(200);
+      expect(me.body).toMatchObject({
+        equipoActualId: equipoId,
+        capitaneaEquipoId: null,
+      });
+      await client().get(fotoUrl).auth(token, { type: 'bearer' }).expect(200);
+      const otro = await register();
+      const repetida = await vincular(otro, datos).expect(409);
+      expect(repetida.body).toMatchObject({
+        message: 'Esa ficha ya está vinculada.',
+      });
+    } finally {
+      await client()
+        .delete(`${plantilla(equipoId)}/${jugadorId}`)
+        .auth(capitan, { type: 'bearer' })
+        .expect(204);
+    }
+  });
+
+  it('devuelve la inscripción de otra temporada y bloquea crear otro equipo allí', async () => {
+    const equipo = await nuevoEquipo();
+    const token = await register();
+    const datos = datosFicha();
+    const alta = await agregar(equipo.id, equipo.token, datos)
+      .attach('foto', png, 'jugadora.png')
+      .expect(201);
+    const { id: jugadorId } = alta.body as { id: number };
+    await vincular(token, datos).expect(200, {
+      jugadorId,
+      equipoId: equipo.id,
+      temporadaId: equipo.temporadaId,
+    });
+    const me = await client()
+      .get(`${api}/auth/me`)
+      .auth(token, { type: 'bearer' })
+      .expect(200);
+    expect(me.body).toMatchObject({
+      equipoActualId: null,
+      capitaneaEquipoId: null,
+    });
+    await client()
+      .post(`${api}/equipos`)
+      .auth(token, { type: 'bearer' })
+      .send({
+        nombre: `Equipo ${randomUUID()}`,
+        temporadaId: equipo.temporadaId,
+      })
+      .expect(409);
+  });
+
+  it('permite vincular una ficha retirada con ambos identificadores de inscripción nulos', async () => {
+    const equipo = await nuevoEquipo();
+    const datos = datosFicha();
+    const alta = await agregar(equipo.id, equipo.token, datos)
+      .attach('foto', png, 'jugadora.png')
+      .expect(201);
+    const { id: jugadorId } = alta.body as { id: number };
+    await client()
+      .delete(`${plantilla(equipo.id)}/${jugadorId}`)
+      .auth(equipo.token, { type: 'bearer' })
+      .expect(204);
+    await vincular(await register(), datos).expect(200, {
+      jugadorId,
+      equipoId: null,
+      temporadaId: null,
+    });
+  });
+
+  it('devuelve los errores de sesión, rol y datos sin distinguir los dos casos de 404', async () => {
+    const equipo = await nuevoEquipo();
+    const datos = datosFicha();
+    await agregar(equipo.id, equipo.token, datos)
+      .attach('foto', png, 'jugadora.png')
+      .expect(201);
+    await client().post(rutaVincular).send(datos).expect(401);
+    for (const email of ['arbitro1@liga.test', 'organizador@liga.test']) {
+      await vincular(await login(email), datos).expect(403);
+    }
+    const token = await register();
+    await vincular(token, { ...datos, identificacion: '#' }).expect(400);
+    await vincular(token, { ...datos, fechaNacimiento: '2004-06-31' }).expect(
+      400,
+    );
+    await client()
+      .post(rutaVincular)
+      .auth(token, { type: 'bearer' })
+      .send({
+        identificacion: datos.identificacion,
+        fechaNacimiento: datos.fechaNacimiento,
+        usuarioId: randomUUID(),
+      })
+      .expect(400);
+    const inexistente = await vincular(token, datosFicha()).expect(404);
+    const fechaDistinta = await vincular(token, {
+      ...datos,
+      fechaNacimiento: '2004-05-13',
+    }).expect(404);
+    expect(inexistente.body).toEqual(fechaDistinta.body);
+    expect(fechaDistinta.body).toMatchObject({
+      message: 'No encontramos una ficha con esos datos.',
+    });
+  });
+
+  it('acepta una vinculación simultánea por ficha y por cuenta', async () => {
+    const equipo = await nuevoEquipo();
+    const [primera, segunda, tercera] = [
+      datosFicha(),
+      datosFicha(),
+      datosFicha(),
+    ];
+    for (const datos of [primera, segunda, tercera]) {
+      await agregar(equipo.id, equipo.token, datos)
+        .attach('foto', png, 'jugadora.png')
+        .expect(201);
+    }
+    const tokens = await Promise.all([register(), register(), register()]);
+    const porFicha = await Promise.all([
+      vincular(tokens[0], primera),
+      vincular(tokens[1], primera),
+    ]);
+    expect(porFicha.map(({ status }) => status).sort((a, b) => a - b)).toEqual([
+      200, 409,
+    ]);
+    const porCuenta = await Promise.all([
+      vincular(tokens[2], segunda),
+      vincular(tokens[2], tercera),
+    ]);
+    expect(porCuenta.map(({ status }) => status).sort((a, b) => a - b)).toEqual(
+      [200, 409],
+    );
+    expect(porCuenta.find(({ status }) => status === 409)?.body).toMatchObject({
+      message: 'Tu cuenta ya tiene una ficha vinculada.',
+    });
+  });
+
+  it('publica el contrato de los endpoints de H1 en Swagger', async () => {
+    const documento = await client().get('/api/docs-json').expect(200);
+    const { paths } = documento.body as {
+      paths: Record<string, Record<string, unknown>>;
+    };
+    expect(paths[`${api}/users`].post).toMatchObject({
+      responses: { 201: { headers: { 'X-Access-Token': expect.any(Object) } } },
+    });
+    expect(paths[`${api}/auth/me`]).toHaveProperty('get');
+    expect(paths[`${api}/temporadas`]).toHaveProperty('get');
+    expect(paths[`${api}/equipos`]).toHaveProperty('post');
+    expect(paths[`${api}/equipos/mi-equipo`]).toHaveProperty('get');
+    expect(paths[`${api}/equipos/{equipoId}/jugadores`].post).toMatchObject({
+      requestBody: { content: { 'multipart/form-data': expect.any(Object) } },
+    });
+    expect(paths[`${api}/equipos/{equipoId}/jugadores`]).toHaveProperty('get');
+    expect(
+      paths[`${api}/equipos/{equipoId}/jugadores/{jugadorId}`],
+    ).toHaveProperty('delete');
+    expect(paths[rutaVincular]).toHaveProperty('post');
+    expect(paths['/uploads/jugadores/{archivo}']).toHaveProperty('get');
   });
 });
