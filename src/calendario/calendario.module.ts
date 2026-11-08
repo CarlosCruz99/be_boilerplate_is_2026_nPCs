@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { GeneracionCalendarioController } from './controllers/generacion-calendario.controller.js';
+import { GeneracionCalendarioService } from './services/generacion-calendario.service.js';
 import {
   ArbitrosController,
   CanchasController,
@@ -7,7 +9,12 @@ import {
 import { PartidosService } from './services/partidos.service.js';
 
 @Module({
-  controllers: [ArbitrosController, CanchasController, PartidosController],
-  providers: [PartidosService],
+  controllers: [
+    ArbitrosController,
+    CanchasController,
+    PartidosController,
+    GeneracionCalendarioController,
+  ],
+  providers: [PartidosService, GeneracionCalendarioService],
 })
 export class CalendarioModule {}
