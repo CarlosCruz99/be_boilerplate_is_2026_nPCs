@@ -62,6 +62,7 @@ model User {
   equiposCapitan  Equipo[]       @relation("CapitanEquipo")
   equiposValidados Equipo[]      @relation("ValidadorEquipo")
   jugador         Jugador?
+  partidosArbitro Partido[] @relation("ArbitroPartido")
 
   @@map("usuario")
 }
@@ -103,6 +104,7 @@ model Temporada {
   actual             Boolean  @default(false)
 
   equipos Equipo[]
+  jornadas Jornada[]
 
   @@map("temporada")
 }
@@ -124,6 +126,8 @@ model Equipo {
   capitan   User      @relation("CapitanEquipo", fields: [capitanId], references: [id])
   validador User? @relation("ValidadorEquipo", fields: [validadoPor], references: [id], onDelete: Restrict)
   jugadores EquipoJugador[]
+  partidosLocal     Partido[] @relation("PartidoLocal")
+  partidosVisitante Partido[] @relation("PartidoVisitante")
 
   @@unique([id, temporadaId])
   @@unique([temporadaId, capitanId])
@@ -158,3 +162,85 @@ model EquipoJugador {
   @@index([equipoId], map: "ix_equipo_jugador_equipo")
   @@map("equipo_jugador")
 }
+// =============================================================================
+// DB-3.1 · Pegar AL FINAL de prisma/schema.prisma (no reemplaza nada).
+// Además hay que agregar 4 líneas de "relaciones inversas" en modelos que ya
+// existen; están indicadas abajo, en la sección "EDICIONES A MODELOS EXISTENTES".
+//
+// Lo que Prisma no expresa vive en la migración .sql:
+//  - exclusiones ex_partido_cancha y ex_partido_arbitro (gist)
+//  - índice parcial uq_partido_cruce_temporada (LEAST/GREATEST)
+//  - índice uq_cancha_nombre sobre lower(nombre)
+//  - CHECK de duración (90 min), equipos distintos y numero >= 1
+// =============================================================================
+
+enum EstadoPartido {
+  PROGRAMADO
+  EN_CURSO
+  FINALIZADO
+  CANCELADO
+
+  @@map("estado_partido")
+}
+
+enum EstadoJornada {
+  BORRADOR
+  PUBLICADA
+
+  @@map("estado_jornada")
+}
+
+model Cancha {
+  id        Int     @id @default(autoincrement())
+  nombre    String  @db.VarChar(80)
+  direccion String  @db.VarChar(200)
+  activa    Boolean @default(true)
+
+  partidos Partido[]
+
+  @@map("cancha")
+}
+
+model Jornada {
+  id          Int           @id @default(autoincrement())
+  temporadaId Int           @map("temporada_id")
+  numero      Int           @db.SmallInt
+  estado      EstadoJornada @default(BORRADOR)
+
+  temporada Temporada @relation(fields: [temporadaId], references: [id])
+  partidos  Partido[]
+
+  @@unique([temporadaId, numero])
+  @@unique([id, temporadaId])
+  @@map("jornada")
+}
+
+model Partido {
+  id                Int           @id @default(autoincrement())
+  temporadaId       Int           @map("temporada_id")
+  jornadaId         Int           @map("jornada_id")
+  equipoLocalId     Int           @map("equipo_local_id")
+  equipoVisitanteId Int           @map("equipo_visitante_id")
+  canchaId          Int           @map("cancha_id")
+  arbitroId         String        @map("arbitro_id") @db.Uuid
+  inicio            DateTime      @db.Timestamptz(3)
+  fin               DateTime      @db.Timestamptz(3)
+  estado            EstadoPartido @default(PROGRAMADO)
+
+  cancha    Cancha  @relation(fields: [canchaId], references: [id])
+  arbitro   User    @relation("ArbitroPartido", fields: [arbitroId], references: [id])
+  jornada   Jornada @relation(fields: [jornadaId, temporadaId], references: [id, temporadaId])
+  local     Equipo  @relation("PartidoLocal", fields: [equipoLocalId, temporadaId], references: [id, temporadaId])
+  visitante Equipo  @relation("PartidoVisitante", fields: [equipoVisitanteId, temporadaId], references: [id, temporadaId])
+
+  @@map("partido")
+}
+
+// =============================================================================
+// EDICIONES A MODELOS EXISTENTES (agregar una línea en cada uno)
+// =============================================================================
+//
+// model Temporada { ...        jornadas Jornada[]                                  }
+// model Equipo    { ...        partidosLocal     Partido[] @relation("PartidoLocal")
+//                              partidosVisitante Partido[] @relation("PartidoVisitante") }
+// model User      { ...        partidosArbitro   Partido[] @relation("ArbitroPartido")   }
