@@ -1,4 +1,11 @@
 import { Module } from '@nestjs/common';
+import { AvisosController } from './controllers/avisos.controller.js';
 import { AvisosService } from './services/avisos.service.js';
-@Module({ providers: [AvisosService], exports: [AvisosService] })
+import { ConsultaAvisosService } from './services/consulta-avisos.service.js';
+
+@Module({
+  controllers: [AvisosController],
+  providers: [AvisosService, ConsultaAvisosService],
+  exports: [AvisosService],
+})
 export class AvisosModule {}
