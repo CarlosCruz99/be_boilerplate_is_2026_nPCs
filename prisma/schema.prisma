@@ -59,8 +59,10 @@ model User {
   fechaNacimiento DateTime   @map("fecha_nacimiento") @db.Date
 
   refreshTokens   RefreshToken[]
+  avisos Aviso[]
   equiposCapitan  Equipo[]       @relation("CapitanEquipo")
   equiposValidados Equipo[]      @relation("ValidadorEquipo")
+  jornadasPublicadas Jornada[] @relation("PublicadorJornada")
   jugador         Jugador?
   partidosArbitro Partido[] @relation("ArbitroPartido")
 
@@ -208,7 +210,11 @@ model Jornada {
   estado      EstadoJornada @default(BORRADOR)
 
   temporada Temporada @relation(fields: [temporadaId], references: [id])
+  publicador User? @relation("PublicadorJornada", fields: [publicadaPorId], references: [id], onDelete: Restrict)
   partidos  Partido[]
+
+  publicadaEn    DateTime? @map("publicada_en") @db.Timestamptz(3)
+  publicadaPorId String?   @map("publicada_por") @db.Uuid
 
   @@unique([temporadaId, numero])
   @@unique([id, temporadaId])
@@ -238,6 +244,57 @@ model Partido {
   @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
   @@index([temporadaId, jornadaId], map: "ix_partido_temporada_jornada")
 }
+
+
+enum ModuloOrigenAviso {
+  CALENDARIO
+  PAGOS
+  RESULTADOS
+
+  @@map("modulo_origen_aviso")
+}
+
+enum TipoAviso {
+  PARTIDO_MODIFICADO
+  JORNADA_PUBLICADA
+  CUOTA_REGISTRADA
+  PAGO_REGISTRADO
+  RESULTADO_FINALIZADO
+  RESULTADO_CORREGIDO
+
+  @@map("tipo_aviso")
+}
+
+enum ReferenciaAviso {
+  PARTIDO
+  JORNADA
+  CUOTA
+  PAGO
+
+  @@map("referencia_aviso")
+}
+
+model Aviso {
+  id                Int               @id @default(autoincrement())
+  usuarioId         String            @map("usuario_id") @db.Uuid
+  moduloOrigen      ModuloOrigenAviso @map("modulo_origen")
+  tipo              TipoAviso
+  titulo            String            @db.VarChar(120)
+  mensaje           String            @db.VarChar(500)
+  referenciaTipo    ReferenciaAviso?  @map("referencia_tipo")
+  referenciaId      Int?              @map("referencia_id")
+  claveIdempotencia String?           @map("clave_idempotencia") @db.VarChar(100)
+  creadoEn          DateTime          @default(now()) @map("creado_en") @db.Timestamptz(3)
+  leidoEn           DateTime?         @map("leido_en") @db.Timestamptz(3)
+  datos             Json?             @db.JsonB
+
+  usuario User @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, claveIdempotencia], map: "aviso_usuario_id_clave_idempotencia_key")
+  @@index([usuarioId, creadoEn(sort: Desc)], map: "ix_aviso_usuario_fecha")
+  @@map("aviso")
+}
+
 
 // =============================================================================
 // EDICIONES A MODELOS EXISTENTES (agregar una línea en cada uno)

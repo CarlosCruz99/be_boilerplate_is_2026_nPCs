@@ -5,6 +5,7 @@ import { PrismaClient } from '../src/generated/prisma/client.js';
 import { PASSWORD_PRUEBA } from './seeds/h1-data.js';
 import { seedH1 } from './seeds/h1.js';
 import { seedCalendario } from './seed-calendario.js';
+import { seedAvisos } from './seed-avisos.js';
 
 const DEMO_EMAIL = 'demo@example.com';
 const DEMO_PASSWORD = 'Demo1234!';
@@ -33,6 +34,7 @@ async function main() {
   const hashPrueba = await bcrypt.hash(PASSWORD_PRUEBA, 12);
   await seedH1(prisma, hashPrueba);
   await seedCalendario(prisma);
+  await seedAvisos(prisma);
 }
 
 try {

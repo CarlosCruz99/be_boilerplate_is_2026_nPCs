@@ -1,8 +1,17 @@
 import type { PrismaClient } from '../src/generated/prisma/client.js';
-import { buildCalendario, CANCHAS } from './seeds/calendario-data.js';
+import {
+  buildCalendario,
+  CANCHAS,
+  PUBLICADA_EN_SEED,
+} from './seeds/calendario-data.js';
 
 const TEMPORADA = 'Apertura 2026';
-const ARBITROS = ['arbitro1@liga.test', 'arbitro2@liga.test', 'arbitro3@liga.test', 'arbitro4@liga.test'];
+const ARBITROS = [
+  'arbitro1@liga.test',
+  'arbitro2@liga.test',
+  'arbitro3@liga.test',
+  'arbitro4@liga.test',
+];
 
 /**
  * DB-3.2: 2 canchas, 11 jornadas (1 a 4 Publicadas, 5 a 11 Borrador) y los 66 partidos
@@ -17,30 +26,48 @@ const ARBITROS = ['arbitro1@liga.test', 'arbitro2@liga.test', 'arbitro3@liga.tes
  *    o las pruebas hayan cambiado (En curso, Finalizado, Cancelado).
  */
 export async function seedCalendario(prisma: PrismaClient): Promise<void> {
-  const temporada = await prisma.temporada.findUnique({ where: { nombre: TEMPORADA } });
-  if (!temporada) throw new Error(`No existe la temporada "${TEMPORADA}". Corre antes el seed de H1 (DB-1.2).`);
+  const temporada = await prisma.temporada.findUnique({
+    where: { nombre: TEMPORADA },
+  });
+  if (!temporada)
+    throw new Error(
+      `No existe la temporada "${TEMPORADA}". Corre antes el seed de H1 (DB-1.2).`,
+    );
 
   const equipos = await prisma.equipo.findMany({
     where: { temporadaId: temporada.id, estado: 'INSCRITO' },
     orderBy: { id: 'asc' },
     select: { id: true },
   });
-  if (equipos.length !== 12) throw new Error(`"${TEMPORADA}" debe tener 12 equipos Inscritos y tiene ${equipos.length}.`);
+  if (equipos.length !== 12)
+    throw new Error(
+      `"${TEMPORADA}" debe tener 12 equipos Inscritos y tiene ${equipos.length}.`,
+    );
 
   const arbitros = await prisma.user.findMany({
     where: { rol: 'ARBITRO', email: { in: ARBITROS } },
     orderBy: { email: 'asc' },
     select: { id: true },
   });
-  if (arbitros.length !== ARBITROS.length) throw new Error('Faltan los 4 árbitros del seed de H1 (arbitro1..4@liga.test).');
+  if (arbitros.length !== ARBITROS.length)
+    throw new Error(
+      'Faltan los 4 árbitros del seed de H1 (arbitro1..4@liga.test).',
+    );
 
   // 1. Canchas
   const canchaIds: number[] = [];
   for (const c of CANCHAS) {
-    const existente = await prisma.cancha.findFirst({ where: { nombre: { equals: c.nombre, mode: 'insensitive' } } });
+    const existente = await prisma.cancha.findFirst({
+      where: { nombre: { equals: c.nombre, mode: 'insensitive' } },
+    });
     const fila = existente
-      ? await prisma.cancha.update({ where: { id: existente.id }, data: { direccion: c.direccion, activa: true } })
-      : await prisma.cancha.create({ data: { nombre: c.nombre, direccion: c.direccion } });
+      ? await prisma.cancha.update({
+          where: { id: existente.id },
+          data: { direccion: c.direccion, activa: true },
+        })
+      : await prisma.cancha.create({
+          data: { nombre: c.nombre, direccion: c.direccion },
+        });
     canchaIds.push(fila.id);
   }
 
@@ -50,13 +77,27 @@ export async function seedCalendario(prisma: PrismaClient): Promise<void> {
     arbitros.map((a) => a.id),
   );
 
+  const organizador = await prisma.user.findUnique({
+    where: { email: 'organizador@liga.test' },
+    select: { id: true },
+  });
+  if (!organizador) throw new Error('Falta el organizador del seed de H1.');
+
   // 3. Jornadas
   const jornadaId = new Map<number, number>();
   for (const j of calendario.jornadas) {
     const fila = await prisma.jornada.upsert({
-      where: { temporadaId_numero: { temporadaId: temporada.id, numero: j.numero } },
+      where: {
+        temporadaId_numero: { temporadaId: temporada.id, numero: j.numero },
+      },
       update: {},
-      create: { temporadaId: temporada.id, numero: j.numero, estado: j.estado },
+      create: {
+        temporadaId: temporada.id,
+        numero: j.numero,
+        estado: j.estado,
+        publicadaEn: j.estado === 'PUBLICADA' ? PUBLICADA_EN_SEED : null,
+        publicadaPorId: j.estado === 'PUBLICADA' ? organizador.id : null,
+      },
     });
     jornadaId.set(j.numero, fila.id);
   }
@@ -71,13 +112,26 @@ export async function seedCalendario(prisma: PrismaClient): Promise<void> {
       equipoLocalId: p.localId,
       equipoVisitanteId: p.visitanteId,
     };
-    const horario = { canchaId: canchaIds[p.cancha], arbitroId: p.arbitroId, inicio: p.inicio, fin: p.fin };
-    const existente = await prisma.partido.findFirst({ where: clave, select: { id: true } });
+    const horario = {
+      canchaId: canchaIds[p.cancha],
+      arbitroId: p.arbitroId,
+      inicio: p.inicio,
+      fin: p.fin,
+    };
+    const existente = await prisma.partido.findFirst({
+      where: clave,
+      select: { id: true },
+    });
     if (existente) {
-      await prisma.partido.update({ where: { id: existente.id }, data: horario });
+      await prisma.partido.update({
+        where: { id: existente.id },
+        data: horario,
+      });
       actualizados += 1;
     } else {
-      await prisma.partido.create({ data: { ...clave, ...horario, estado: 'PROGRAMADO' } });
+      await prisma.partido.create({
+        data: { ...clave, ...horario, estado: 'PROGRAMADO' },
+      });
       creados += 1;
     }
   }

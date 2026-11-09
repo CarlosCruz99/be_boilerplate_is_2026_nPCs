@@ -17,6 +17,8 @@ export const CANCHAS = [
 ];
 /** Las jornadas 1 a 4 nacen Publicadas; de la 5 a la 11, en Borrador. */
 export const ULTIMA_JORNADA_PUBLICADA = 4;
+/** DB-16.1: momento (fijo, para que el seed sea reproducible) en que se "publicaron" las jornadas 1 a 4. */
+export const PUBLICADA_EN_SEED = new Date('2026-11-06T18:00:00Z');
 
 export interface JornadaCalendario {
   numero: number;

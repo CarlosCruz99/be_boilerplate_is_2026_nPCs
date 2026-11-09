@@ -340,7 +340,7 @@ describe('BE-3.2: generación transaccional del calendario', () => {
     expect(r.rows[0].id).toBe(previa.rows[0].id);
     const otra = await nuevaTemporada(4);
     await db.query(
-      "INSERT INTO jornada(temporada_id,numero,estado) VALUES ($1,1,'PUBLICADA')",
+      "INSERT INTO jornada(temporada_id,numero,estado,publicada_en,publicada_por) VALUES ($1,1,'PUBLICADA',now(),(SELECT id FROM usuario WHERE email='organizador@liga.test'))",
       [otra],
     );
     await generar({}, otra).expect(409);
