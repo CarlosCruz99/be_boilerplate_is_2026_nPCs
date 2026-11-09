@@ -1,3 +1,5 @@
+import { CalendarioOrganizadorController } from './controllers/calendario-organizador.controller.js';
+import { CalendarioOrganizadorService } from './services/calendario-organizador.service.js';
 import { Module } from '@nestjs/common';
 import { AvisosModule } from '../avisos/avisos.module.js';
 import { PublicacionJornadaController } from './controllers/publicacion-jornada.controller.js';
@@ -16,6 +18,7 @@ import { PartidosService } from './services/partidos.service.js';
 @Module({
   imports: [AvisosModule],
   controllers: [
+    CalendarioOrganizadorController,
     PublicacionJornadaController,
     ArbitrosController,
     CanchasController,
@@ -24,6 +27,7 @@ import { PartidosService } from './services/partidos.service.js';
     ConsultaCalendarioController,
   ],
   providers: [
+    CalendarioOrganizadorService,
     PublicacionJornadaService,
     PartidosService,
     GeneracionCalendarioService,
