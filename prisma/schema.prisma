@@ -239,6 +239,9 @@ model Partido {
   visitante Equipo  @relation("PartidoVisitante", fields: [equipoVisitanteId, temporadaId], references: [id, temporadaId])
 
   @@map("partido")
+  @@index([equipoLocalId, inicio], map: "ix_partido_local_inicio")
+  @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
+  @@index([temporadaId, jornadaId], map: "ix_partido_temporada_jornada")
 }
 
 // =============================================================================
