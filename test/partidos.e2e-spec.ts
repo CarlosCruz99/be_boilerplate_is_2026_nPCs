@@ -426,7 +426,7 @@ describe('BE-3.1: partidos y árbitros', () => {
   it('permite editar una jornada publicada sin avisos mientras BE-15.1 está pendiente', async () => {
     const r = await crear().expect(201);
     await db.query(
-      "UPDATE jornada SET estado='PUBLICADA' WHERE temporada_id=$1",
+      "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=(SELECT id FROM usuario WHERE email='organizador@liga.test') WHERE temporada_id=$1",
       [temporadaId],
     );
     const actualizado = await editar(r.body.id as number, {

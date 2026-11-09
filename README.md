@@ -635,3 +635,9 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 | `prisma:studio` | Abre Prisma Studio |
 | `db:seed` | Carga el usuario demo |
 | `db:reset` | Resetea la base y vuelve a migrar |
+
+
+## Publicación de jornadas y avisos
+
+- [BE-16.1: publicación y decisiones de integración](docs/be-16-1.md).
+- [Contrato central de avisos (H20)](docs/contrato-avisos.md).

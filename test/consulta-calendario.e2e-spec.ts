@@ -172,7 +172,7 @@ describe('BE-4.1 calendario del equipo', () => {
 
   it('devuelve los once partidos a ambos miembros con todas las jornadas publicadas', async () => {
     const { rows } = await db.query<{ id: number }>(
-      "UPDATE jornada SET estado = 'PUBLICADA' WHERE temporada_id = $1 AND estado = 'BORRADOR' RETURNING id",
+      "UPDATE jornada SET estado = 'PUBLICADA', publicada_en=now(), publicada_por=(SELECT id FROM usuario WHERE email='organizador@liga.test') WHERE temporada_id = $1 AND estado = 'BORRADOR' RETURNING id",
       [temporadaId],
     );
     try {
@@ -188,7 +188,7 @@ describe('BE-4.1 calendario del equipo', () => {
       }
     } finally {
       await db.query(
-        "UPDATE jornada SET estado = 'BORRADOR' WHERE id = ANY($1::int[])",
+        "UPDATE jornada SET estado = 'BORRADOR', publicada_en=NULL, publicada_por=NULL WHERE id = ANY($1::int[])",
         [rows.map(({ id }) => id)],
       );
     }
