@@ -6,6 +6,7 @@ import { PASSWORD_PRUEBA } from './seeds/h1-data.js';
 import { seedH1 } from './seeds/h1.js';
 import { seedCalendario } from './seed-calendario.js';
 import { seedAvisos } from './seed-avisos.js';
+import { seedEstadisticas } from './seed-estadisticas.js';
 
 const DEMO_EMAIL = 'demo@example.com';
 const DEMO_PASSWORD = 'Demo1234!';
@@ -35,6 +36,7 @@ async function main() {
   await seedH1(prisma, hashPrueba);
   await seedCalendario(prisma);
   await seedAvisos(prisma);
+  await seedEstadisticas(prisma);
 }
 
 try {
