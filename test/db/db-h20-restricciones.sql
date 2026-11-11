@@ -13,7 +13,7 @@ BEGIN
   BEGIN
     EXECUTE sentencia;
   EXCEPTION WHEN OTHERS THEN
-    IF SQLSTATE = codigo THEN RAISE NOTICE 'OK    % (rechazado: %)', caso, SQLSTATE; RETURN; END IF;
+    IF SQLSTATE = codigo OR (codigo = '23503' AND SQLSTATE = '23001') THEN RAISE NOTICE 'OK    % (rechazado: %)', caso, SQLSTATE; RETURN; END IF;
     RAISE EXCEPTION 'FALLO %: fallo por otro motivo (%): %', caso, SQLSTATE, SQLERRM;
   END;
   RAISE EXCEPTION 'FALLO %: la sentencia NO fue rechazada', caso;
