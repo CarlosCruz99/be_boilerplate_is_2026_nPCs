@@ -47,24 +47,25 @@ enum EstadoEquipo {
 }
 
 model User {
-  id           String      @id @default(uuid()) @db.Uuid
-  email        String      @unique
-  passwordHash String      @map("password_hash")
-  isActive     Boolean     @default(true) @map("is_active")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   rol             RolUsuario @default(JUGADOR)
   nombre          String     @db.VarChar(120)
   fechaNacimiento DateTime   @map("fecha_nacimiento") @db.Date
 
-  refreshTokens   RefreshToken[]
-  avisos Aviso[]
-  equiposCapitan  Equipo[]       @relation("CapitanEquipo")
-  equiposValidados Equipo[]      @relation("ValidadorEquipo")
-  jornadasPublicadas Jornada[] @relation("PublicadorJornada")
-  jugador         Jugador?
-  partidosArbitro Partido[] @relation("ArbitroPartido")
+  refreshTokens      RefreshToken[]
+  avisos             Aviso[]
+  equiposCapitan     Equipo[]           @relation("CapitanEquipo")
+  equiposValidados   Equipo[]           @relation("ValidadorEquipo")
+  jornadasPublicadas Jornada[]          @relation("PublicadorJornada")
+  jugador            Jugador?
+  partidosArbitro    Partido[]          @relation("ArbitroPartido")
+  bitacorasMarcador  BitacoraMarcador[]
 
   @@map("usuario")
 }
@@ -105,7 +106,7 @@ model Temporada {
   inscripcionAbierta Boolean  @default(true) @map("inscripcion_abierta")
   actual             Boolean  @default(false)
 
-  equipos Equipo[]
+  equipos  Equipo[]
   jornadas Jornada[]
 
   @@map("temporada")
@@ -124,12 +125,13 @@ model Equipo {
   validadoPor     String?   @map("validado_por") @db.Uuid
   fechaValidacion DateTime? @map("fecha_validacion") @db.Timestamptz(3)
 
-  temporada Temporada @relation(fields: [temporadaId], references: [id])
-  capitan   User      @relation("CapitanEquipo", fields: [capitanId], references: [id])
-  validador User? @relation("ValidadorEquipo", fields: [validadoPor], references: [id], onDelete: Restrict)
-  jugadores EquipoJugador[]
-  partidosLocal     Partido[] @relation("PartidoLocal")
-  partidosVisitante Partido[] @relation("PartidoVisitante")
+  temporada         Temporada       @relation(fields: [temporadaId], references: [id])
+  capitan           User            @relation("CapitanEquipo", fields: [capitanId], references: [id])
+  validador         User?           @relation("ValidadorEquipo", fields: [validadoPor], references: [id], onDelete: Restrict)
+  jugadores         EquipoJugador[]
+  partidosLocal     Partido[]       @relation("PartidoLocal")
+  partidosVisitante Partido[]       @relation("PartidoVisitante")
+  posiciones        Posicion[]
 
   @@unique([id, temporadaId])
   @@unique([temporadaId, capitanId])
@@ -159,22 +161,13 @@ model EquipoJugador {
   jugador Jugador @relation(fields: [jugadorId], references: [id])
   equipo  Equipo  @relation(fields: [equipoId, temporadaId], references: [id, temporadaId], onDelete: Cascade)
 
+  participaciones ParticipacionPartido[]
+
   @@id([equipoId, jugadorId])
   @@unique([temporadaId, jugadorId])
   @@index([equipoId], map: "ix_equipo_jugador_equipo")
   @@map("equipo_jugador")
 }
-// =============================================================================
-// DB-3.1 · Pegar AL FINAL de prisma/schema.prisma (no reemplaza nada).
-// Además hay que agregar 4 líneas de "relaciones inversas" en modelos que ya
-// existen; están indicadas abajo, en la sección "EDICIONES A MODELOS EXISTENTES".
-//
-// Lo que Prisma no expresa vive en la migración .sql:
-//  - exclusiones ex_partido_cancha y ex_partido_arbitro (gist)
-//  - índice parcial uq_partido_cruce_temporada (LEAST/GREATEST)
-//  - índice uq_cancha_nombre sobre lower(nombre)
-//  - CHECK de duración (90 min), equipos distintos y numero >= 1
-// =============================================================================
 
 enum EstadoPartido {
   PROGRAMADO
@@ -209,9 +202,9 @@ model Jornada {
   numero      Int           @db.SmallInt
   estado      EstadoJornada @default(BORRADOR)
 
-  temporada Temporada @relation(fields: [temporadaId], references: [id])
-  publicador User? @relation("PublicadorJornada", fields: [publicadaPorId], references: [id], onDelete: Restrict)
-  partidos  Partido[]
+  temporada  Temporada @relation(fields: [temporadaId], references: [id])
+  publicador User?     @relation("PublicadorJornada", fields: [publicadaPorId], references: [id], onDelete: Restrict)
+  partidos   Partido[]
 
   publicadaEn    DateTime? @map("publicada_en") @db.Timestamptz(3)
   publicadaPorId String?   @map("publicada_por") @db.Uuid
@@ -239,12 +232,21 @@ model Partido {
   local     Equipo  @relation("PartidoLocal", fields: [equipoLocalId, temporadaId], references: [id, temporadaId])
   visitante Equipo  @relation("PartidoVisitante", fields: [equipoVisitanteId, temporadaId], references: [id, temporadaId])
 
-  @@map("partido")
+  golesLocal      Int       @default(0) @map("goles_local")
+  golesVisitante  Int       @default(0) @map("goles_visitante")
+  faltasLocal     Int       @default(0) @map("faltas_local")
+  faltasVisitante Int       @default(0) @map("faltas_visitante")
+  inicioReal      DateTime? @map("inicio_real") @db.Timestamptz(3)
+  finReal         DateTime? @map("fin_real") @db.Timestamptz(3)
+
+  bitacoras       BitacoraMarcador[]
+  participaciones ParticipacionPartido[]
+
   @@index([equipoLocalId, inicio], map: "ix_partido_local_inicio")
   @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
   @@index([temporadaId, jornadaId], map: "ix_partido_temporada_jornada")
+  @@map("partido")
 }
-
 
 enum ModuloOrigenAviso {
   CALENDARIO
@@ -295,6 +297,54 @@ model Aviso {
   @@map("aviso")
 }
 
+model BitacoraMarcador {
+  id              Int      @id @default(autoincrement())
+  partidoId       Int      @map("partido_id")
+  usuarioId       String   @map("usuario_id") @db.Uuid
+  golesLocal      Int      @map("goles_local")
+  golesVisitante  Int      @map("goles_visitante")
+  faltasLocal     Int      @map("faltas_local")
+  faltasVisitante Int      @map("faltas_visitante")
+  accion          String   @db.VarChar(10) // INICIAR | ACTUALIZAR | FINALIZAR (CHECK en la base)
+  fechaRegistro   DateTime @default(now()) @map("fecha_registro") @db.Timestamptz(3)
+
+  partido Partido @relation(fields: [partidoId], references: [id])
+  usuario User    @relation(fields: [usuarioId], references: [id])
+
+  @@index([partidoId], map: "ix_bitacora_partido")
+  @@map("bitacora_marcador")
+}
+
+model ParticipacionPartido {
+  partidoId Int @map("partido_id")
+  jugadorId Int @map("jugador_id")
+  equipoId  Int @map("equipo_id")
+
+  partido       Partido       @relation(fields: [partidoId], references: [id])
+  equipoJugador EquipoJugador @relation(fields: [equipoId, jugadorId], references: [equipoId, jugadorId])
+
+  @@id([partidoId, jugadorId])
+  @@map("participacion_partido")
+}
+
+model Posicion {
+  id          Int @id @default(autoincrement())
+  temporadaId Int @map("temporada_id")
+  equipoId    Int @map("equipo_id")
+  pj          Int @default(0)
+  pg          Int @default(0)
+  pe          Int @default(0)
+  pp          Int @default(0)
+  gf          Int @default(0)
+  gc          Int @default(0)
+  dg          Int @default(0)
+  puntos      Int @default(0)
+
+  equipo Equipo @relation(fields: [equipoId, temporadaId], references: [id, temporadaId])
+
+  @@unique([temporadaId, equipoId])
+  @@map("posicion")
+}
 
 // =============================================================================
 // EDICIONES A MODELOS EXISTENTES (agregar una línea en cada uno)
