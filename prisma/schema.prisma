@@ -66,6 +66,7 @@ model User {
   jugador            Jugador?
   partidosArbitro    Partido[]          @relation("ArbitroPartido")
   bitacorasMarcador  BitacoraMarcador[]
+  cuotasCreadas Cuota[] @relation("CreadorCuota")
 
   @@map("usuario")
 }
@@ -132,6 +133,7 @@ model Equipo {
   partidosLocal     Partido[]       @relation("PartidoLocal")
   partidosVisitante Partido[]       @relation("PartidoVisitante")
   posiciones        Posicion[]
+  cuotas Cuota[]
 
   @@unique([id, temporadaId])
   @@unique([temporadaId, capitanId])
@@ -149,6 +151,7 @@ model Jugador {
 
   usuario User?           @relation(fields: [usuarioId], references: [id])
   equipos EquipoJugador[]
+  estadisticas EstadisticaPartido[]
 
   @@map("jugador")
 }
@@ -241,6 +244,8 @@ model Partido {
 
   bitacoras       BitacoraMarcador[]
   participaciones ParticipacionPartido[]
+  estadisticas EstadisticaPartido[]
+  cuotas       Cuota[]
 
   @@index([equipoLocalId, inicio], map: "ix_partido_local_inicio")
   @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
@@ -344,6 +349,49 @@ model Posicion {
 
   @@unique([temporadaId, equipoId])
   @@map("posicion")
+}
+
+enum ConceptoCuota {
+  INSCRIPCION
+  ARBITRAJE
+
+  @@map("concepto_cuota")
+}
+
+model EstadisticaPartido {
+  id            Int      @id @default(autoincrement())
+  partidoId     Int      @map("partido_id")
+  jugadorId     Int      @map("jugador_id")
+  goles         Int      @default(0)
+  asistencias   Int      @default(0)
+  tarjetas      Int      @default(0)
+  actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en") @db.Timestamptz(3)
+
+  partido Partido @relation(fields: [partidoId], references: [id])
+  jugador Jugador @relation(fields: [jugadorId], references: [id])
+
+  @@unique([partidoId, jugadorId])
+  @@map("estadistica_partido")
+}
+
+model Cuota {
+  id               Int           @id @default(autoincrement())
+  temporadaId      Int           @map("temporada_id")
+  equipoId         Int           @map("equipo_id")
+  concepto         ConceptoCuota
+  partidoId        Int?          @map("partido_id")
+  monto            Decimal       @db.Decimal(12, 2)
+  fechaVencimiento DateTime      @map("fecha_vencimiento") @db.Date
+  creadoPor        String        @map("creado_por") @db.Uuid
+  creadoEn         DateTime      @default(now()) @map("creado_en") @db.Timestamptz(3)
+
+  equipo  Equipo   @relation(fields: [equipoId, temporadaId], references: [id, temporadaId])
+  // Restrict explícito: en una relación opcional Prisma pondría SetNull por defecto y la
+  // base (ON DELETE RESTRICT) quedaría distinta del schema.
+  partido Partido? @relation(fields: [partidoId], references: [id], onDelete: Restrict)
+  creador User     @relation("CreadorCuota", fields: [creadoPor], references: [id])
+
+  @@map("cuota")
 }
 
 // =============================================================================
