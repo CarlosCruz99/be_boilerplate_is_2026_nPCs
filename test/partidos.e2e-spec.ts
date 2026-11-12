@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import request from 'supertest';
 import type { createApp as CreateApp } from '../src/create-app.js';
+import type { CorreoCambioPartidoService } from '../src/calendario/services/correo-cambio-partido.service.js';
+import type { ResendCorreoService } from '../src/calendario/services/resend-correo.service.js';
 
 describe('BE-3.1: partidos y árbitros', () => {
   let app: INestApplication<Server>;
@@ -17,6 +19,7 @@ describe('BE-3.1: partidos y árbitros', () => {
   let canchas: number[];
   let arbitros: string[];
   let usuarios: string[];
+  let jugadores: number[];
   const api = '/api/v1';
   const client = () => request(app.getHttpServer());
   const base = new Date(Date.UTC(new Date().getUTCFullYear() + 2, 0, 7, 14));
@@ -74,6 +77,7 @@ describe('BE-3.1: partidos y árbitros', () => {
     canchas = [];
     arbitros = [];
     usuarios = [];
+    jugadores = [];
     const temporada = await db.query<{ id: number }>(
       "INSERT INTO temporada(nombre,fecha_inicio,fecha_fin) VALUES ($1,'2027-01-01','2099-12-31') RETURNING id",
       [`BE31-${randomUUID()}`],
@@ -98,11 +102,23 @@ describe('BE-3.1: partidos y árbitros', () => {
   });
 
   afterEach(async () => {
+    await db.query(
+      'DELETE FROM entrega_correo e USING cambio_partido c, partido p WHERE e.cambio_id=c.id AND c.partido_id=p.id AND p.temporada_id=$1',
+      [temporadaId],
+    );
+    await db.query('DELETE FROM aviso WHERE usuario_id=ANY($1::uuid[])', [
+      usuarios,
+    ]);
+    await db.query(
+      'DELETE FROM cambio_partido c USING partido p WHERE c.partido_id=p.id AND p.temporada_id=$1',
+      [temporadaId],
+    );
     await db.query('DELETE FROM partido WHERE temporada_id=$1', [temporadaId]);
     await db.query('DELETE FROM jornada WHERE temporada_id=$1', [temporadaId]);
     await db.query('DELETE FROM equipo WHERE temporada_id=$1', [temporadaId]);
     await db.query('DELETE FROM temporada WHERE id=$1', [temporadaId]);
     await db.query('DELETE FROM cancha WHERE id=ANY($1::int[])', [canchas]);
+    await db.query('DELETE FROM jugador WHERE id=ANY($1::int[])', [jugadores]);
     await db.query('DELETE FROM usuario WHERE id=ANY($1::uuid[])', [usuarios]);
   });
   afterAll(async () => {
@@ -423,26 +439,174 @@ describe('BE-3.1: partidos y árbitros', () => {
     await editar(r.body.id as number, { estado: 'CANCELADO' }).expect(200);
   });
 
-  it('permite editar una jornada publicada sin avisos mientras BE-15.1 está pendiente', async () => {
+  it('registra los cambios de una jornada publicada y avisa una vez a cada destinatario', async () => {
+    const jugadorVinculado = await usuario('JUGADOR');
+    for (const usuarioId of [jugadorVinculado, usuarios[0], null]) {
+      const ficha = await db.query<{ id: number }>(
+        "INSERT INTO jugador(nombre_completo,fecha_nacimiento,identificacion,foto_url,usuario_id) VALUES ('Ficha H15','2000-01-01',$1,'/foto.jpg',$2) RETURNING id",
+        [randomUUID().slice(0, 20), usuarioId],
+      );
+      const jugadorId = ficha.rows[0].id;
+      jugadores.push(jugadorId);
+      await db.query(
+        'INSERT INTO equipo_jugador(equipo_id,jugador_id,temporada_id) VALUES ($1,$2,$3)',
+        [equipos[0], jugadorId, temporadaId],
+      );
+    }
+
     const r = await crear().expect(201);
+    const id = r.body.id as number;
+    await editar(id, { inicio: fecha(0, 15) }).expect(200);
     await db.query(
-      "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=(SELECT id FROM usuario WHERE email='organizador@liga.test') WHERE temporada_id=$1",
-      [temporadaId],
+      "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=$2 WHERE temporada_id=$1",
+      [temporadaId, organizadorId],
     );
-    const actualizado = await editar(r.body.id as number, {
-      canchaId: canchas[1],
-      inicio: fecha(1),
-    }).expect(200);
+    await editar(id, { arbitroId: arbitros[1] }).expect(200);
+    const cambio = { canchaId: canchas[1], inicio: fecha(1, 30) };
+    const resultados = await Promise.all([
+      editar(id, cambio).expect(200),
+      editar(id, cambio).expect(200),
+    ]);
+    const [actualizado] = resultados;
     expect(actualizado.body).toMatchObject({
       canchaId: canchas[1],
-      inicio: fecha(1),
-      fin: fecha(1, 90),
+      inicio: fecha(1, 30),
+      fin: fecha(1, 120),
     });
-    const jornada = await db.query(
-      'SELECT estado FROM jornada WHERE temporada_id=$1',
-      [temporadaId],
+
+    const cambios = await db.query(
+      'SELECT campo_modificado, valor_anterior, valor_nuevo, modificado_por FROM cambio_partido WHERE partido_id=$1',
+      [id],
     );
-    expect(jornada.rows[0].estado).toBe('PUBLICADA');
+    expect(cambios.rows).toHaveLength(3);
+    expect(cambios.rows).toEqual(
+      expect.arrayContaining([
+        {
+          campo_modificado: 'FECHA',
+          valor_anterior: fecha().slice(0, 10),
+          valor_nuevo: fecha(1).slice(0, 10),
+          modificado_por: organizadorId,
+        },
+        {
+          campo_modificado: 'HORA',
+          valor_anterior: '08:15:00.000',
+          valor_nuevo: '08:30:00.000',
+          modificado_por: organizadorId,
+        },
+        {
+          campo_modificado: 'CANCHA',
+          valor_anterior: String(canchas[0]),
+          valor_nuevo: String(canchas[1]),
+          modificado_por: organizadorId,
+        },
+      ]),
+    );
+
+    const avisos = await db.query<{ usuario_id: string; datos: unknown }>(
+      "SELECT usuario_id, datos FROM aviso WHERE tipo='PARTIDO_MODIFICADO' AND referencia_tipo='PARTIDO' AND referencia_id=$1",
+      [id],
+    );
+    expect(avisos.rows.map((aviso) => aviso.usuario_id).sort()).toEqual(
+      [usuarios[0], usuarios[1], jugadorVinculado].sort(),
+    );
+    const entregas = await db.query(
+      'SELECT e.usuario_id, e.estado, e.intentos FROM entrega_correo e JOIN cambio_partido c ON c.id=e.cambio_id WHERE c.partido_id=$1',
+      [id],
+    );
+    expect(entregas.rows).toHaveLength(3);
+    expect(entregas.rows).toEqual(
+      expect.arrayContaining(
+        [usuarios[0], usuarios[1], jugadorVinculado].map((usuarioId) => ({
+          usuario_id: usuarioId,
+          estado: 'PENDIENTE',
+          intentos: 0,
+        })),
+      ),
+    );
+    for (const aviso of avisos.rows) {
+      expect(aviso.datos).toMatchObject({
+        equipoLocal: 'Equipo 0',
+        equipoVisitante: 'Equipo 1',
+        cambios: expect.arrayContaining([
+          {
+            campoModificado: 'CANCHA',
+            valorAnterior: expect.stringMatching(/^Cancha /),
+            valorNuevo: expect.stringMatching(/^Cancha /),
+          },
+        ]),
+      });
+    }
+  });
+
+  it('procesa una entrega por destinatario y conserva los avisos al agotar los reintentos', async () => {
+    const r = await crear().expect(201);
+    const id = r.body.id as number;
+    await db.query(
+      "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=$2 WHERE temporada_id=$1",
+      [temporadaId, organizadorId],
+    );
+    await editar(id, { canchaId: canchas[1] }).expect(200);
+
+    const workerPath =
+      '../dist/calendario/services/correo-cambio-partido.service.js';
+    const proveedorPath =
+      '../dist/calendario/services/resend-correo.service.js';
+    const { CorreoCambioPartidoService: Worker } = (await import(
+      /* @vite-ignore */ workerPath
+    )) as {
+      CorreoCambioPartidoService: typeof CorreoCambioPartidoService;
+    };
+    const { ResendCorreoService: Proveedor } = (await import(
+      /* @vite-ignore */ proveedorPath
+    )) as {
+      ResendCorreoService: typeof ResendCorreoService;
+    };
+    const worker = app.get(Worker);
+    const temporal = `${usuarios[0]}@liga.test`;
+    const enviar = vi
+      .spyOn(app.get(Proveedor), 'enviar')
+      .mockImplementation(async (_clave, email) =>
+        email === temporal ? 'REINTENTAR' : 'ENVIADO',
+      );
+    try {
+      await Promise.all([
+        worker.procesarSiguiente(),
+        worker.procesarSiguiente(),
+      ]);
+      await worker.procesarSiguiente();
+      expect(enviar).toHaveBeenCalledTimes(2);
+      for (let i = 0; i < 3; i++) {
+        await db.query(
+          "UPDATE entrega_correo SET ultimo_intento_en=now() - interval '31 seconds' WHERE usuario_id=$1",
+          [usuarios[0]],
+        );
+        await worker.procesarSiguiente();
+      }
+      await worker.procesarSiguiente();
+      expect(enviar).toHaveBeenCalledTimes(5);
+      const intentos = enviar.mock.calls.filter(
+        ([, email]) => email === temporal,
+      );
+      expect(intentos).toHaveLength(4);
+      expect(new Set(intentos.map(([clave]) => clave)).size).toBe(1);
+      const entregas = await db.query(
+        'SELECT e.usuario_id, e.estado, e.intentos FROM entrega_correo e JOIN cambio_partido c ON c.id=e.cambio_id WHERE c.partido_id=$1',
+        [id],
+      );
+      expect(entregas.rows).toEqual(
+        expect.arrayContaining([
+          { usuario_id: usuarios[0], estado: 'FALLIDO', intentos: 4 },
+          { usuario_id: usuarios[1], estado: 'ENVIADO', intentos: 1 },
+        ]),
+      );
+      const avisos = await db.query(
+        "SELECT id FROM aviso WHERE tipo='PARTIDO_MODIFICADO' AND referencia_tipo='PARTIDO' AND referencia_id=$1",
+        [id],
+      );
+      expect(avisos.rowCount).toBe(2);
+    } finally {
+      enviar.mockRestore();
+    }
   });
 
   it('vuelve a validar la semana al editar y conserva el horario si falla', async () => {
@@ -457,6 +621,43 @@ describe('BE-3.1: partidos y árbitros', () => {
       segundo.body.id,
     ]);
     expect((guardado.rows[0].inicio as Date).toISOString()).toBe(fecha(7));
+  });
+
+  it('revierte la edición y todos los avisos si falla un destinatario de H15', async () => {
+    const r = await crear().expect(201);
+    const id = r.body.id as number;
+    await db.query(
+      "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=$2 WHERE temporada_id=$1",
+      [temporadaId, organizadorId],
+    );
+    const nombre = `be15_fallo_${randomUUID().replaceAll('-', '')}`;
+    await db.query(
+      `CREATE FUNCTION ${nombre}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fallo BE15 de prueba'; END; $$`,
+    );
+    try {
+      await db.query(
+        `CREATE TRIGGER ${nombre} BEFORE INSERT ON aviso FOR EACH ROW WHEN (NEW.usuario_id='${usuarios[1]}'::uuid AND NEW.tipo='PARTIDO_MODIFICADO') EXECUTE FUNCTION ${nombre}()`,
+      );
+      await editar(id, { canchaId: canchas[1] }).expect(500);
+      const partido = await db.query(
+        'SELECT cancha_id FROM partido WHERE id=$1',
+        [id],
+      );
+      expect(partido.rows).toEqual([{ cancha_id: canchas[0] }]);
+      const cambios = await db.query(
+        'SELECT 1 FROM cambio_partido WHERE partido_id=$1',
+        [id],
+      );
+      const avisos = await db.query(
+        "SELECT 1 FROM aviso WHERE tipo='PARTIDO_MODIFICADO' AND referencia_tipo='PARTIDO' AND referencia_id=$1",
+        [id],
+      );
+      expect(cambios.rowCount).toBe(0);
+      expect(avisos.rowCount).toBe(0);
+    } finally {
+      await db.query(`DROP TRIGGER IF EXISTS ${nombre} ON aviso`);
+      await db.query(`DROP FUNCTION ${nombre}()`);
+    }
   });
 
   it('revierte partido y jornada si falla la confirmación de la transacción', async () => {
@@ -491,9 +692,10 @@ describe('BE-3.1: partidos y árbitros', () => {
 
   it('rechaza cambios sobre partidos en curso o finalizados', async () => {
     const r = await crear().expect(201);
-    await db.query("UPDATE partido SET estado='EN_CURSO' WHERE id=$1", [
-      r.body.id,
-    ]);
+    await db.query(
+      "UPDATE partido SET estado='EN_CURSO', inicio_real=inicio WHERE id=$1",
+      [r.body.id],
+    );
     const cancelacion = await editar(r.body.id as number, {
       estado: 'CANCELADO',
     }).expect(409);
@@ -501,9 +703,10 @@ describe('BE-3.1: partidos y árbitros', () => {
       'No se puede cambiar de ‘En curso’ a ‘Cancelado’.',
     );
     await editar(r.body.id as number, { canchaId: canchas[1] }).expect(409);
-    await db.query("UPDATE partido SET estado='FINALIZADO' WHERE id=$1", [
-      r.body.id,
-    ]);
+    await db.query(
+      "UPDATE partido SET estado='FINALIZADO', fin_real=fin WHERE id=$1",
+      [r.body.id],
+    );
     await editar(r.body.id as number, { estado: 'CANCELADO' }).expect(422);
     await editar(r.body.id as number, { canchaId: canchas[1] }).expect(422);
   });

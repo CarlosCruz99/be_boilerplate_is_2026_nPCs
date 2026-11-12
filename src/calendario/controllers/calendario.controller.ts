@@ -21,7 +21,8 @@ import {
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
-import { Roles } from '@Auth/decorators';
+import { CurrentUser, Roles } from '@Auth/decorators';
+import type { User } from '@PrismaClient';
 import {
   ArbitroRespuestaDto,
   CanchaRespuestaDto,
@@ -72,14 +73,15 @@ export class PartidosController {
   @ApiOperation({
     summary: 'Reprograma o cancela un partido',
     description:
-      'Permite canchaId, arbitroId e inicio; para cancelar, enviar solo {"estado":"CANCELADO"}. No modifica equipos ni jornada. PROGRAMADO puede cancelarse aun si su inicio ya pasó. Avisos de cambios en jornadas publicadas pendientes de BE-15.1.',
+      'Permite canchaId, arbitroId e inicio. Para cancelar, enviar solo {"estado":"CANCELADO"}. PROGRAMADO puede cancelarse aun si su inicio ya pasó. Los cambios de fecha, hora o cancha en jornadas publicadas generan avisos para ambos equipos.',
   })
   @ApiOkResponse({ type: PartidoRespuestaDto })
   editar(
     @Param() { id }: PartidoParamsDto,
     @Body() dto: EditarPartidoDto,
+    @CurrentUser() organizador: User,
   ): Promise<PartidoRespuestaDto> {
-    return this.partidos.editar(id, dto);
+    return this.partidos.editar(id, dto, organizador.id);
   }
 }
 
