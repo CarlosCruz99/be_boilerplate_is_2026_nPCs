@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import request from 'supertest';
 import type { createApp as CreateApp } from '../src/create-app.js';
+import type { CorreoCambioPartidoService } from '../src/calendario/services/correo-cambio-partido.service.js';
+import type { ResendCorreoService } from '../src/calendario/services/resend-correo.service.js';
 
 describe('BE-3.1: partidos y árbitros', () => {
   let app: INestApplication<Server>;
@@ -100,6 +102,10 @@ describe('BE-3.1: partidos y árbitros', () => {
   });
 
   afterEach(async () => {
+    await db.query(
+      'DELETE FROM entrega_correo e USING cambio_partido c, partido p WHERE e.cambio_id=c.id AND c.partido_id=p.id AND p.temporada_id=$1',
+      [temporadaId],
+    );
     await db.query('DELETE FROM aviso WHERE usuario_id=ANY($1::uuid[])', [
       usuarios,
     ]);
@@ -503,6 +509,20 @@ describe('BE-3.1: partidos y árbitros', () => {
     expect(avisos.rows.map((aviso) => aviso.usuario_id).sort()).toEqual(
       [usuarios[0], usuarios[1], jugadorVinculado].sort(),
     );
+    const entregas = await db.query(
+      'SELECT e.usuario_id, e.estado, e.intentos FROM entrega_correo e JOIN cambio_partido c ON c.id=e.cambio_id WHERE c.partido_id=$1',
+      [id],
+    );
+    expect(entregas.rows).toHaveLength(3);
+    expect(entregas.rows).toEqual(
+      expect.arrayContaining(
+        [usuarios[0], usuarios[1], jugadorVinculado].map((usuarioId) => ({
+          usuario_id: usuarioId,
+          estado: 'PENDIENTE',
+          intentos: 0,
+        })),
+      ),
+    );
     for (const aviso of avisos.rows) {
       expect(aviso.datos).toMatchObject({
         equipoLocal: 'Equipo 0',
@@ -515,6 +535,77 @@ describe('BE-3.1: partidos y árbitros', () => {
           },
         ]),
       });
+    }
+  });
+
+  it('procesa una entrega por destinatario y conserva los avisos al agotar los reintentos', async () => {
+    const r = await crear().expect(201);
+    const id = r.body.id as number;
+    await db.query(
+      "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=$2 WHERE temporada_id=$1",
+      [temporadaId, organizadorId],
+    );
+    await editar(id, { canchaId: canchas[1] }).expect(200);
+
+    const workerPath =
+      '../dist/calendario/services/correo-cambio-partido.service.js';
+    const proveedorPath =
+      '../dist/calendario/services/resend-correo.service.js';
+    const { CorreoCambioPartidoService: Worker } = (await import(
+      /* @vite-ignore */ workerPath
+    )) as {
+      CorreoCambioPartidoService: typeof CorreoCambioPartidoService;
+    };
+    const { ResendCorreoService: Proveedor } = (await import(
+      /* @vite-ignore */ proveedorPath
+    )) as {
+      ResendCorreoService: typeof ResendCorreoService;
+    };
+    const worker = app.get(Worker);
+    const temporal = `${usuarios[0]}@liga.test`;
+    const enviar = vi
+      .spyOn(app.get(Proveedor), 'enviar')
+      .mockImplementation(async (_clave, email) =>
+        email === temporal ? 'REINTENTAR' : 'ENVIADO',
+      );
+    try {
+      await Promise.all([
+        worker.procesarSiguiente(),
+        worker.procesarSiguiente(),
+      ]);
+      await worker.procesarSiguiente();
+      expect(enviar).toHaveBeenCalledTimes(2);
+      for (let i = 0; i < 3; i++) {
+        await db.query(
+          "UPDATE entrega_correo SET ultimo_intento_en=now() - interval '31 seconds' WHERE usuario_id=$1",
+          [usuarios[0]],
+        );
+        await worker.procesarSiguiente();
+      }
+      await worker.procesarSiguiente();
+      expect(enviar).toHaveBeenCalledTimes(5);
+      const intentos = enviar.mock.calls.filter(
+        ([, email]) => email === temporal,
+      );
+      expect(intentos).toHaveLength(4);
+      expect(new Set(intentos.map(([clave]) => clave)).size).toBe(1);
+      const entregas = await db.query(
+        'SELECT e.usuario_id, e.estado, e.intentos FROM entrega_correo e JOIN cambio_partido c ON c.id=e.cambio_id WHERE c.partido_id=$1',
+        [id],
+      );
+      expect(entregas.rows).toEqual(
+        expect.arrayContaining([
+          { usuario_id: usuarios[0], estado: 'FALLIDO', intentos: 4 },
+          { usuario_id: usuarios[1], estado: 'ENVIADO', intentos: 1 },
+        ]),
+      );
+      const avisos = await db.query(
+        "SELECT id FROM aviso WHERE tipo='PARTIDO_MODIFICADO' AND referencia_tipo='PARTIDO' AND referencia_id=$1",
+        [id],
+      );
+      expect(avisos.rowCount).toBe(2);
+    } finally {
+      enviar.mockRestore();
     }
   });
 

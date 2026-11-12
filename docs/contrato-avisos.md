@@ -64,7 +64,7 @@ await prisma.$transaction(async (db) => {
 });
 ```
 
-Los módulos de negocio no acceden a `prisma.aviso`; solo lo hace el servicio central. Las escrituras directas de los seeds y las pruebas no forman parte del flujo de aplicación. No se envían correos ni mensajes externos.
+El servicio central escribe los avisos de la aplicación. Los módulos le delegan la creación y pueden consultar los avisos persistidos para procesar sus propias entregas.
 
 ## Aviso por cambio de partido · BE-15.1
 
@@ -89,5 +89,20 @@ type DatosCambioPartido = {
 Las fechas y horas se expresan en hora de El Salvador con los formatos
 `AAAA-MM-DD` y `HH:mm:ss.SSS`. Para una cancha se devuelve el nombre en el
 aviso y se guardan los identificadores en el historial de cambios.
+
+## Correo por cambio de partido · BE-15.2
+
+La edición registra una entrega pendiente por destinatario en la misma
+transacción que el aviso. Después de confirmar, el proceso de correo de H15
+toma las entregas con un bloqueo de fila y usa el título y el mensaje del aviso.
+Un fallo temporal admite hasta tres reintentos, con 30 segundos entre intentos.
+El estado de la entrega se guarda por separado del aviso de la bandeja.
+
+Para activar el envío, configura `RESEND_API_KEY` y `H15_CORREO_REMITENTE`
+con un remitente autorizado por Resend. Con ambas variables vacías, la app
+conserva las entregas pendientes. Resend recibe la misma clave por cambio y
+destinatario en todos los intentos. Las entregas pendientes de 23 horas o más
+pasan a fallidas al procesarse para respetar la ventana de deduplicación del
+proveedor. [Idempotencia de Resend](https://resend.com/docs/dashboard/emails/idempotency-keys)
 
 Fuentes: [BE-20.1 / NPCS-144](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-144), [DB-20.1 / NPCS-143](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-143). El servicio se agregó como dependencia autorizada de BE-16.1. La revisión y coordinación de su adopción con el responsable de H20 queda para el PR; no se actualizaron estados de Jira ni se enviaron mensajes a otros integrantes.

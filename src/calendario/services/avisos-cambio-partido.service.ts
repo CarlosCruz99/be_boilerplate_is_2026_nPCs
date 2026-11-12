@@ -108,5 +108,12 @@ export class AvisosCambioPartidoService {
         db,
       );
     }
+    await db.$executeRaw`
+      INSERT INTO entrega_correo(cambio_id, usuario_id)
+      SELECT ${cambioId}, usuario_id FROM aviso
+      WHERE clave_idempotencia = ${claveIdempotencia}
+        AND tipo = 'PARTIDO_MODIFICADO' AND referencia_id = ${partido.id}
+      ON CONFLICT (cambio_id, usuario_id) DO NOTHING
+    `;
   }
 }

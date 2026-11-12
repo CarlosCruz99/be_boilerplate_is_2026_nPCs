@@ -15,6 +15,8 @@ import {
 } from './controllers/calendario.controller.js';
 import { PartidosService } from './services/partidos.service.js';
 import { AvisosCambioPartidoService } from './services/avisos-cambio-partido.service.js';
+import { CorreoCambioPartidoService } from './services/correo-cambio-partido.service.js';
+import { ResendCorreoService } from './services/resend-correo.service.js';
 
 @Module({
   imports: [AvisosModule],
@@ -32,6 +34,8 @@ import { AvisosCambioPartidoService } from './services/avisos-cambio-partido.ser
     PublicacionJornadaService,
     PartidosService,
     AvisosCambioPartidoService,
+    CorreoCambioPartidoService,
+    ResendCorreoService,
     GeneracionCalendarioService,
     ConsultaCalendarioService,
   ],
