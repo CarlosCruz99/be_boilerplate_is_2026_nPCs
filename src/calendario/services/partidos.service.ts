@@ -14,6 +14,7 @@ import type {
 } from '../dto/partido.dto.js';
 import { limitesSemana } from '../utils/semana.js';
 import { traducirConflictoPartido } from '../utils/conflictos-partido.js';
+import { AvisosCambioPartidoService } from './avisos-cambio-partido.service.js';
 
 const partidoSelect = {
   id: true,
@@ -26,13 +27,22 @@ const partidoSelect = {
   estado: true,
   jornada: { select: { numero: true, estado: true } },
 } satisfies Prisma.PartidoSelect;
+const partidoParaEdicionSelect = {
+  ...partidoSelect,
+  cancha: { select: { nombre: true } },
+  local: { select: { nombre: true } },
+  visitante: { select: { nombre: true } },
+} satisfies Prisma.PartidoSelect;
 type PartidoSeleccionado = Prisma.PartidoGetPayload<{
   select: typeof partidoSelect;
 }>;
 
 @Injectable()
 export class PartidosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avisosCambio: AvisosCambioPartidoService,
+  ) {}
 
   arbitros() {
     return this.prisma.user.findMany({
@@ -104,6 +114,7 @@ export class PartidosService {
   async editar(
     id: number,
     dto: EditarPartidoDto,
+    organizadorId: string,
   ): Promise<PartidoRespuestaDto> {
     const campos = Object.keys(dto).filter(
       (campo) => dto[campo as keyof EditarPartidoDto] !== undefined,
@@ -127,7 +138,7 @@ export class PartidosService {
           await db.$queryRaw`SELECT id FROM partido WHERE id=${id} FOR NO KEY UPDATE`;
           const anterior = await db.partido.findUnique({
             where: { id },
-            select: partidoSelect,
+            select: partidoParaEdicionSelect,
           });
           if (!anterior) throw new NotFoundException('El partido no existe.');
           if (anterior.estado === 'EN_CURSO') {
@@ -176,14 +187,16 @@ export class PartidosService {
           await this.validarSemana(db, id, inicio, equipos);
           const actualizado = await db.partido.findUniqueOrThrow({
             where: { id },
-            select: partidoSelect,
+            select: partidoParaEdicionSelect,
           });
-          if (
-            anterior.jornada.estado === 'PUBLICADA' &&
-            (anterior.canchaId !== canchaId ||
-              anterior.inicio.getTime() !== inicio.getTime())
-          ) {
-            this.cambioDePartidoPublicadoPendiente();
+          if (anterior.jornada.estado === 'PUBLICADA') {
+            await this.avisosCambio.registrar(
+              db,
+              referencia.temporadaId,
+              organizadorId,
+              anterior,
+              actualizado,
+            );
           }
           return this.respuesta(actualizado);
         },
@@ -192,14 +205,6 @@ export class PartidosService {
     } catch (error) {
       traducirConflictoPartido(error);
     }
-  }
-
-  private cambioDePartidoPublicadoPendiente(): void {
-    // TODO(BE-15.1 / NPCS-117): reemplazar este punto por la llamada al servicio
-    // real de avisos al cambiar fecha, hora o cancha de una jornada PUBLICADA.
-    // La edición está permitida SIN AVISO temporalmente por decisión de producto.
-    // Cuando exista BE-15.1, persistir el aviso en esta misma transacción (pasar db,
-    // partido anterior y actualizado) para no notificar cambios que se reviertan.
   }
 
   private async bloquearTemporada(
@@ -298,13 +303,23 @@ export class PartidosService {
   }
 
   private respuesta({
+    id,
+    equipoLocalId,
+    equipoVisitanteId,
+    canchaId,
+    arbitroId,
+    estado,
     jornada,
     inicio,
     fin,
-    ...partido
   }: PartidoSeleccionado): PartidoRespuestaDto {
     return {
-      ...partido,
+      id,
+      equipoLocalId,
+      equipoVisitanteId,
+      canchaId,
+      arbitroId,
+      estado,
       jornada: jornada.numero,
       inicio: inicio.toISOString(),
       fin: fin.toISOString(),
