@@ -15,7 +15,7 @@ BEGIN
   BEGIN
     EXECUTE sentencia;
   EXCEPTION WHEN OTHERS THEN
-    IF SQLSTATE = codigo THEN
+    IF SQLSTATE = codigo OR (codigo = '23503' AND SQLSTATE = '23001') THEN
       RAISE NOTICE 'OK    % (rechazado: %)', caso, SQLSTATE;
       RETURN;
     END IF;

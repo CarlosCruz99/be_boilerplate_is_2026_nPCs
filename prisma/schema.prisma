@@ -47,24 +47,31 @@ enum EstadoEquipo {
 }
 
 model User {
-  id           String      @id @default(uuid()) @db.Uuid
-  email        String      @unique
-  passwordHash String      @map("password_hash")
-  isActive     Boolean     @default(true) @map("is_active")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   rol             RolUsuario @default(JUGADOR)
   nombre          String     @db.VarChar(120)
   fechaNacimiento DateTime   @map("fecha_nacimiento") @db.Date
 
-  refreshTokens   RefreshToken[]
-  avisos Aviso[]
-  equiposCapitan  Equipo[]       @relation("CapitanEquipo")
-  equiposValidados Equipo[]      @relation("ValidadorEquipo")
-  jornadasPublicadas Jornada[] @relation("PublicadorJornada")
-  jugador         Jugador?
-  partidosArbitro Partido[] @relation("ArbitroPartido")
+  refreshTokens      RefreshToken[]
+  avisos             Aviso[]
+  equiposCapitan     Equipo[]           @relation("CapitanEquipo")
+  equiposValidados   Equipo[]           @relation("ValidadorEquipo")
+  jornadasPublicadas Jornada[]          @relation("PublicadorJornada")
+  jugador            Jugador?
+  partidosArbitro    Partido[]          @relation("ArbitroPartido")
+  bitacorasMarcador  BitacoraMarcador[]
+  cuotasCreadas Cuota[] @relation("CreadorCuota")
+  pagosRegistrados Pago[]           @relation("RegistradorPago")
+  cambiosPartido   CambioPartido[]  @relation("ModificadorCambio")
+  entregasCorreo   EntregaCorreo[]  @relation("DestinatarioEntrega")
+  contenidosSubidos    ContenidoGaleria[] @relation("SubidoPorGaleria")
+  contenidosEliminados ContenidoGaleria[] @relation("EliminadoPorGaleria")
 
   @@map("usuario")
 }
@@ -105,7 +112,7 @@ model Temporada {
   inscripcionAbierta Boolean  @default(true) @map("inscripcion_abierta")
   actual             Boolean  @default(false)
 
-  equipos Equipo[]
+  equipos  Equipo[]
   jornadas Jornada[]
 
   @@map("temporada")
@@ -124,12 +131,14 @@ model Equipo {
   validadoPor     String?   @map("validado_por") @db.Uuid
   fechaValidacion DateTime? @map("fecha_validacion") @db.Timestamptz(3)
 
-  temporada Temporada @relation(fields: [temporadaId], references: [id])
-  capitan   User      @relation("CapitanEquipo", fields: [capitanId], references: [id])
-  validador User? @relation("ValidadorEquipo", fields: [validadoPor], references: [id], onDelete: Restrict)
-  jugadores EquipoJugador[]
-  partidosLocal     Partido[] @relation("PartidoLocal")
-  partidosVisitante Partido[] @relation("PartidoVisitante")
+  temporada         Temporada       @relation(fields: [temporadaId], references: [id])
+  capitan           User            @relation("CapitanEquipo", fields: [capitanId], references: [id])
+  validador         User?           @relation("ValidadorEquipo", fields: [validadoPor], references: [id], onDelete: Restrict)
+  jugadores         EquipoJugador[]
+  partidosLocal     Partido[]       @relation("PartidoLocal")
+  partidosVisitante Partido[]       @relation("PartidoVisitante")
+  posiciones        Posicion[]
+  cuotas Cuota[]
 
   @@unique([id, temporadaId])
   @@unique([temporadaId, capitanId])
@@ -147,6 +156,7 @@ model Jugador {
 
   usuario User?           @relation(fields: [usuarioId], references: [id])
   equipos EquipoJugador[]
+  estadisticas EstadisticaPartido[]
 
   @@map("jugador")
 }
@@ -159,22 +169,13 @@ model EquipoJugador {
   jugador Jugador @relation(fields: [jugadorId], references: [id])
   equipo  Equipo  @relation(fields: [equipoId, temporadaId], references: [id, temporadaId], onDelete: Cascade)
 
+  participaciones ParticipacionPartido[]
+
   @@id([equipoId, jugadorId])
   @@unique([temporadaId, jugadorId])
   @@index([equipoId], map: "ix_equipo_jugador_equipo")
   @@map("equipo_jugador")
 }
-// =============================================================================
-// DB-3.1 · Pegar AL FINAL de prisma/schema.prisma (no reemplaza nada).
-// Además hay que agregar 4 líneas de "relaciones inversas" en modelos que ya
-// existen; están indicadas abajo, en la sección "EDICIONES A MODELOS EXISTENTES".
-//
-// Lo que Prisma no expresa vive en la migración .sql:
-//  - exclusiones ex_partido_cancha y ex_partido_arbitro (gist)
-//  - índice parcial uq_partido_cruce_temporada (LEAST/GREATEST)
-//  - índice uq_cancha_nombre sobre lower(nombre)
-//  - CHECK de duración (90 min), equipos distintos y numero >= 1
-// =============================================================================
 
 enum EstadoPartido {
   PROGRAMADO
@@ -209,9 +210,9 @@ model Jornada {
   numero      Int           @db.SmallInt
   estado      EstadoJornada @default(BORRADOR)
 
-  temporada Temporada @relation(fields: [temporadaId], references: [id])
-  publicador User? @relation("PublicadorJornada", fields: [publicadaPorId], references: [id], onDelete: Restrict)
-  partidos  Partido[]
+  temporada  Temporada @relation(fields: [temporadaId], references: [id])
+  publicador User?     @relation("PublicadorJornada", fields: [publicadaPorId], references: [id], onDelete: Restrict)
+  partidos   Partido[]
 
   publicadaEn    DateTime? @map("publicada_en") @db.Timestamptz(3)
   publicadaPorId String?   @map("publicada_por") @db.Uuid
@@ -239,12 +240,25 @@ model Partido {
   local     Equipo  @relation("PartidoLocal", fields: [equipoLocalId, temporadaId], references: [id, temporadaId])
   visitante Equipo  @relation("PartidoVisitante", fields: [equipoVisitanteId, temporadaId], references: [id, temporadaId])
 
-  @@map("partido")
+  golesLocal      Int       @default(0) @map("goles_local")
+  golesVisitante  Int       @default(0) @map("goles_visitante")
+  faltasLocal     Int       @default(0) @map("faltas_local")
+  faltasVisitante Int       @default(0) @map("faltas_visitante")
+  inicioReal      DateTime? @map("inicio_real") @db.Timestamptz(3)
+  finReal         DateTime? @map("fin_real") @db.Timestamptz(3)
+
+  bitacoras       BitacoraMarcador[]
+  participaciones ParticipacionPartido[]
+  estadisticas EstadisticaPartido[]
+  cuotas       Cuota[]
+  cambios CambioPartido[]
+  galeria ContenidoGaleria[]
+
   @@index([equipoLocalId, inicio], map: "ix_partido_local_inicio")
   @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
   @@index([temporadaId, jornadaId], map: "ix_partido_temporada_jornada")
+  @@map("partido")
 }
-
 
 enum ModuloOrigenAviso {
   CALENDARIO
@@ -295,6 +309,215 @@ model Aviso {
   @@map("aviso")
 }
 
+model BitacoraMarcador {
+  id              Int      @id @default(autoincrement())
+  partidoId       Int      @map("partido_id")
+  usuarioId       String   @map("usuario_id") @db.Uuid
+  golesLocal      Int      @map("goles_local")
+  golesVisitante  Int      @map("goles_visitante")
+  faltasLocal     Int      @map("faltas_local")
+  faltasVisitante Int      @map("faltas_visitante")
+  accion          String   @db.VarChar(10) // INICIAR | ACTUALIZAR | FINALIZAR (CHECK en la base)
+  fechaRegistro   DateTime @default(now()) @map("fecha_registro") @db.Timestamptz(3)
+
+  partido Partido @relation(fields: [partidoId], references: [id])
+  usuario User    @relation(fields: [usuarioId], references: [id])
+
+  @@index([partidoId], map: "ix_bitacora_partido")
+  @@map("bitacora_marcador")
+}
+
+model ParticipacionPartido {
+  partidoId Int @map("partido_id")
+  jugadorId Int @map("jugador_id")
+  equipoId  Int @map("equipo_id")
+
+  partido       Partido       @relation(fields: [partidoId], references: [id])
+  equipoJugador EquipoJugador @relation(fields: [equipoId, jugadorId], references: [equipoId, jugadorId])
+
+  @@id([partidoId, jugadorId])
+  @@map("participacion_partido")
+}
+
+model Posicion {
+  id          Int @id @default(autoincrement())
+  temporadaId Int @map("temporada_id")
+  equipoId    Int @map("equipo_id")
+  pj          Int @default(0)
+  pg          Int @default(0)
+  pe          Int @default(0)
+  pp          Int @default(0)
+  gf          Int @default(0)
+  gc          Int @default(0)
+  dg          Int @default(0)
+  puntos      Int @default(0)
+
+  equipo Equipo @relation(fields: [equipoId, temporadaId], references: [id, temporadaId])
+
+  @@unique([temporadaId, equipoId])
+  @@map("posicion")
+}
+
+enum ConceptoCuota {
+  INSCRIPCION
+  ARBITRAJE
+
+  @@map("concepto_cuota")
+}
+
+model EstadisticaPartido {
+  id            Int      @id @default(autoincrement())
+  partidoId     Int      @map("partido_id")
+  jugadorId     Int      @map("jugador_id")
+  goles         Int      @default(0)
+  asistencias   Int      @default(0)
+  tarjetas      Int      @default(0)
+  actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en") @db.Timestamptz(3)
+
+  partido Partido @relation(fields: [partidoId], references: [id])
+  jugador Jugador @relation(fields: [jugadorId], references: [id])
+
+  @@unique([partidoId, jugadorId])
+  @@map("estadistica_partido")
+}
+
+model Cuota {
+  id               Int           @id @default(autoincrement())
+  temporadaId      Int           @map("temporada_id")
+  equipoId         Int           @map("equipo_id")
+  concepto         ConceptoCuota
+  partidoId        Int?          @map("partido_id")
+  monto            Decimal       @db.Decimal(12, 2)
+  fechaVencimiento DateTime      @map("fecha_vencimiento") @db.Date
+  creadoPor        String        @map("creado_por") @db.Uuid
+  creadoEn         DateTime      @default(now()) @map("creado_en") @db.Timestamptz(3)
+
+  equipo  Equipo   @relation(fields: [equipoId, temporadaId], references: [id, temporadaId])
+  // Restrict explícito: en una relación opcional Prisma pondría SetNull por defecto y la
+  // base (ON DELETE RESTRICT) quedaría distinta del schema.
+  partido Partido? @relation(fields: [partidoId], references: [id], onDelete: Restrict)
+  creador User     @relation("CreadorCuota", fields: [creadoPor], references: [id])
+  pagos Pago[]
+
+  @@map("cuota")
+}
+
+enum EstadoPago {
+  PENDIENTE
+  VERIFICADO
+  RECHAZADO
+
+  @@map("estado_pago")
+}
+
+enum CampoCambioPartido {
+  FECHA
+  HORA
+  CANCHA
+
+  @@map("campo_cambio_partido")
+}
+
+enum EstadoEntregaCorreo {
+  PENDIENTE
+  ENVIADO
+  FALLIDO
+  OMITIDO
+
+  @@map("estado_entrega_correo")
+}
+
+model Pago {
+  id                Int        @id @default(autoincrement())
+  cuotaId           Int        @map("cuota_id")
+  monto             Decimal    @db.Decimal(12, 2)
+  fechaPago         DateTime   @map("fecha_pago") @db.Date
+  comprobanteClave  String     @unique @map("comprobante_clave") @db.VarChar(255)
+  comprobanteMime   String     @map("comprobante_mime") @db.VarChar(100)
+  comprobanteBytes  Int        @map("comprobante_bytes")
+  estado            EstadoPago @default(PENDIENTE)
+  registradoPor     String     @map("registrado_por") @db.Uuid
+  creadoEn          DateTime   @default(now()) @map("creado_en") @db.Timestamptz(3)
+  claveIdempotencia String?    @map("clave_idempotencia") @db.VarChar(100)
+
+  cuota       Cuota @relation(fields: [cuotaId], references: [id])
+  registrador User  @relation("RegistradorPago", fields: [registradoPor], references: [id])
+
+  @@unique([registradoPor, claveIdempotencia], map: "pago_registrado_por_clave_idempotencia_key")
+  @@index([cuotaId, estado], map: "ix_pago_cuota_estado")
+  @@map("pago")
+}
+
+model CambioPartido {
+  id              Int                @id @default(autoincrement())
+  partidoId       Int                @map("partido_id")
+  campoModificado CampoCambioPartido @map("campo_modificado")
+  valorAnterior   String             @map("valor_anterior")
+  valorNuevo      String             @map("valor_nuevo")
+  modificadoPor   String             @map("modificado_por") @db.Uuid
+  modificadoEn    DateTime           @default(now()) @map("modificado_en") @db.Timestamptz(3)
+
+  partido     Partido         @relation(fields: [partidoId], references: [id])
+  modificador User            @relation("ModificadorCambio", fields: [modificadoPor], references: [id])
+  entregas    EntregaCorreo[]
+
+  @@index([partidoId, modificadoEn], map: "ix_cambio_partido_partido_fecha")
+  @@map("cambio_partido")
+}
+
+model EntregaCorreo {
+  cambioId        Int                 @map("cambio_id")
+  usuarioId       String              @map("usuario_id") @db.Uuid
+  estado          EstadoEntregaCorreo @default(PENDIENTE)
+  intentos        Int                 @default(0) @db.SmallInt
+  ultimoIntentoEn DateTime?           @map("ultimo_intento_en") @db.Timestamptz(3)
+
+  cambio  CambioPartido @relation(fields: [cambioId], references: [id])
+  usuario User          @relation("DestinatarioEntrega", fields: [usuarioId], references: [id])
+
+  @@id([cambioId, usuarioId])
+  @@index([estado], map: "ix_entrega_correo_estado")
+  @@map("entrega_correo")
+}
+
+enum TipoContenidoGaleria {
+  FOTO
+  VIDEO
+
+  @@map("tipo_contenido_galeria")
+}
+
+enum EstadoContenidoGaleria {
+  ACTIVO
+  ELIMINADO
+
+  @@map("estado_contenido_galeria")
+}
+
+model ContenidoGaleria {
+  id             String                 @id @default(uuid()) @db.Uuid
+  partidoId      Int                    @map("partido_id")
+  tipo           TipoContenidoGaleria
+  storageKey     String                 @unique @map("storage_key") @db.VarChar(255)
+  nombreOriginal String                 @map("nombre_original") @db.VarChar(255)
+  mimeType       String                 @map("mime_type") @db.VarChar(100)
+  tamanoBytes    Int                    @map("tamano_bytes")
+  descripcion    String?                @db.VarChar(200)
+  subidoPor      String                 @map("subido_por") @db.Uuid
+  creadoEn       DateTime               @default(now()) @map("creado_en") @db.Timestamptz(3)
+  estado         EstadoContenidoGaleria @default(ACTIVO)
+  eliminadoEn    DateTime?              @map("eliminado_en") @db.Timestamptz(3)
+  eliminadoPorId String?                @map("eliminado_por") @db.Uuid
+
+  partido    Partido @relation(fields: [partidoId], references: [id])
+  subidor    User    @relation("SubidoPorGaleria", fields: [subidoPor], references: [id])
+  // Restrict explícito: en una relación opcional Prisma pondría SetNull por defecto y la
+  // base (ON DELETE RESTRICT) quedaría distinta del schema.
+  eliminador User?   @relation("EliminadoPorGaleria", fields: [eliminadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([partidoId, creadoEn(sort: Desc), id(sort: Desc)], map: "ix_galeria_partido_fecha")
+  @@map("contenido_galeria")
+}
 
 // =============================================================================
 // EDICIONES A MODELOS EXISTENTES (agregar una línea en cada uno)

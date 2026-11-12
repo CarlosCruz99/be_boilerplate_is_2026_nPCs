@@ -3,6 +3,8 @@
 -- Todo corre en una transaccion que termina en ROLLBACK: no deja datos.
 BEGIN;
 
+UPDATE temporada SET actual = false WHERE actual;
+
 CREATE FUNCTION pg_temp.debe_fallar(caso text, sentencia text) RETURNS void AS $$
 BEGIN
   BEGIN
