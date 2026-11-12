@@ -370,7 +370,9 @@ describe('BE-3.2: generación transaccional del calendario', () => {
     await generar().expect(201);
     for (const estado of ['EN_CURSO', 'FINALIZADO']) {
       await db.query(
-        'UPDATE partido SET estado=$2::estado_partido WHERE temporada_id=$1',
+        `UPDATE partido SET estado=$2::estado_partido, inicio_real=inicio,
+          fin_real=CASE WHEN $2::estado_partido='FINALIZADO' THEN fin END
+          WHERE temporada_id=$1`,
         [temporadaId, estado],
       );
       await generar().expect(409);

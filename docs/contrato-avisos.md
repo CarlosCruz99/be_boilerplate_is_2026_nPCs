@@ -66,4 +66,28 @@ await prisma.$transaction(async (db) => {
 
 Los módulos de negocio no acceden a `prisma.aviso`; solo lo hace el servicio central. Las escrituras directas de los seeds y las pruebas no forman parte del flujo de aplicación. No se envían correos ni mensajes externos.
 
+## Aviso por cambio de partido · BE-15.1
+
+La edición de un partido programado de una jornada publicada crea un aviso
+`PARTIDO_MODIFICADO` por destinatario. Una edición puede registrar varios
+campos en `cambio_partido` y agruparlos en el mismo aviso. El detalle de H19
+devuelve `referencia: { tipo: 'PARTIDO', id: partidoId }` para abrir el partido
+y los siguientes datos para mostrar los cambios.
+
+```ts
+type DatosCambioPartido = {
+  equipoLocal: string;
+  equipoVisitante: string;
+  cambios: {
+    campoModificado: 'FECHA' | 'HORA' | 'CANCHA';
+    valorAnterior: string;
+    valorNuevo: string;
+  }[];
+};
+```
+
+Las fechas y horas se expresan en hora de El Salvador con los formatos
+`AAAA-MM-DD` y `HH:mm:ss.SSS`. Para una cancha se devuelve el nombre en el
+aviso y se guardan los identificadores en el historial de cambios.
+
 Fuentes: [BE-20.1 / NPCS-144](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-144), [DB-20.1 / NPCS-143](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-143). El servicio se agregó como dependencia autorizada de BE-16.1. La revisión y coordinación de su adopción con el responsable de H20 queda para el PR; no se actualizaron estados de Jira ni se enviaron mensajes a otros integrantes.
