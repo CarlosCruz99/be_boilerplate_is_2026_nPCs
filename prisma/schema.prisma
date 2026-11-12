@@ -70,6 +70,8 @@ model User {
   pagosRegistrados Pago[]           @relation("RegistradorPago")
   cambiosPartido   CambioPartido[]  @relation("ModificadorCambio")
   entregasCorreo   EntregaCorreo[]  @relation("DestinatarioEntrega")
+  contenidosSubidos    ContenidoGaleria[] @relation("SubidoPorGaleria")
+  contenidosEliminados ContenidoGaleria[] @relation("EliminadoPorGaleria")
 
   @@map("usuario")
 }
@@ -250,6 +252,7 @@ model Partido {
   estadisticas EstadisticaPartido[]
   cuotas       Cuota[]
   cambios CambioPartido[]
+  galeria ContenidoGaleria[]
 
   @@index([equipoLocalId, inicio], map: "ix_partido_local_inicio")
   @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
@@ -475,6 +478,45 @@ model EntregaCorreo {
   @@id([cambioId, usuarioId])
   @@index([estado], map: "ix_entrega_correo_estado")
   @@map("entrega_correo")
+}
+
+enum TipoContenidoGaleria {
+  FOTO
+  VIDEO
+
+  @@map("tipo_contenido_galeria")
+}
+
+enum EstadoContenidoGaleria {
+  ACTIVO
+  ELIMINADO
+
+  @@map("estado_contenido_galeria")
+}
+
+model ContenidoGaleria {
+  id             String                 @id @default(uuid()) @db.Uuid
+  partidoId      Int                    @map("partido_id")
+  tipo           TipoContenidoGaleria
+  storageKey     String                 @unique @map("storage_key") @db.VarChar(255)
+  nombreOriginal String                 @map("nombre_original") @db.VarChar(255)
+  mimeType       String                 @map("mime_type") @db.VarChar(100)
+  tamanoBytes    Int                    @map("tamano_bytes")
+  descripcion    String?                @db.VarChar(200)
+  subidoPor      String                 @map("subido_por") @db.Uuid
+  creadoEn       DateTime               @default(now()) @map("creado_en") @db.Timestamptz(3)
+  estado         EstadoContenidoGaleria @default(ACTIVO)
+  eliminadoEn    DateTime?              @map("eliminado_en") @db.Timestamptz(3)
+  eliminadoPorId String?                @map("eliminado_por") @db.Uuid
+
+  partido    Partido @relation(fields: [partidoId], references: [id])
+  subidor    User    @relation("SubidoPorGaleria", fields: [subidoPor], references: [id])
+  // Restrict explícito: en una relación opcional Prisma pondría SetNull por defecto y la
+  // base (ON DELETE RESTRICT) quedaría distinta del schema.
+  eliminador User?   @relation("EliminadoPorGaleria", fields: [eliminadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([partidoId, creadoEn(sort: Desc), id(sort: Desc)], map: "ix_galeria_partido_fecha")
+  @@map("contenido_galeria")
 }
 
 // =============================================================================
