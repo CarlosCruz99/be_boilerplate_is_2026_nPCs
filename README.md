@@ -641,3 +641,135 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 - [BE-16.1: publicación y decisiones de integración](docs/be-16-1.md).
 - [Contrato central de avisos (H20)](docs/contrato-avisos.md).
+
+## Autorización de las acciones del árbitro (BE-5.3)
+
+### Guardado del marcador (BE-5.1)
+
+`PATCH /api/v1/partidos/:partidoId/marcador` exige al árbitro asignado y estado
+`EN_CURSO`. El cuerpo debe incluir `golesLocal`, `golesVisitante`, `faltasLocal`
+y `faltasVisitante`, todos números enteros entre 0 y 99. Se permiten correcciones
+a la baja. Campos adicionales, valores ausentes, cadenas numéricas y valores
+fuera de rango devuelven 400. Cada guardado exitoso, incluso con los mismos
+valores, deja una fila `ACTUALIZAR` en `bitacora_marcador`.
+
+La respuesta 200 contiene `partidoId`, `estado`, los cuatro valores y
+`actualizadoEn`, tomado de la fecha persistida en esa fila de bitácora.
+El guardado y la bitácora son atómicos. La transacción `ReadCommitted` bloquea
+temporada y partido, en ese orden, y vuelve a comprobar la asignación y el estado
+antes de escribir. Si falla la bitácora, se revierte el marcador.
+
+Sin sesión se responde 401; sin permiso, 403; partido inexistente, 404;
+estado `PROGRAMADO`, `FINALIZADO` o `CANCELADO`, 409. Los
+participantes (BE-5.5) y el detalle H6 corresponden a
+sus propias tareas. BE-5.1 no recalcula posiciones ni envía avisos de resultado final.
+
+Pruebas: `npm test` valida los DTO; `npm run test:e2e` prueba el endpoint,
+permisos, transacciones, rollback y dos guardados concurrentes con PostgreSQL.
+Usar una base dedicada a pruebas, con migraciones y seed aplicados.
+
+### Inicio del partido (BE-5.4)
+
+`POST /api/v1/partidos/:partidoId/iniciar`, sin cuerpo (se acepta `{}`), exige
+sesión activa y árbitro asignado. Solo permite `PROGRAMADO` → `EN_CURSO`.
+Devuelve 200 con `{ partidoId, estado: "EN_CURSO", inicioReal }`.
+La hora real la toma el servidor después de obtener los bloqueos; no se recibe
+del cliente. No hay restricción por hora programada ni por publicación de jornada,
+según la transición de H5 en el documento de decisiones (sección 5.2).
+
+Estado, `inicio_real` y una instantánea `INICIAR` en `bitacora_marcador` se
+guardan dentro de la misma transacción `ReadCommitted`, bloqueando temporada
+antes de partido y revalidando la asignación y el estado después del bloqueo.
+El marcador y las faltas se conservan. Un fallo de bitácora revierte el inicio.
+Dos inicios concurrentes producen un 200 y un 409, con una sola fila de bitácora.
+
+Sin sesión: 401; sin permiso: 403; partido inexistente: 404; identificador inválido
+o cuerpo con datos: 400. Un partido ya `EN_CURSO`, `FINALIZADO` o `CANCELADO`
+devuelve 409 con `No se puede cambiar de “{estado actual}” a “En curso”.`
+Un segundo inicio conserva la hora original y no agrega otra bitácora.
+El inicio permite usar a continuación el endpoint de marcador de BE-5.1.
+
+Pruebas: `npm test` verifica estados y revalidación de permisos; `npm run test:e2e`
+verifica el endpoint, persistencia, permisos, rollback y concurrencia con PostgreSQL.
+La validación de goles mencionada en el cierre de Jira ya se cubre en BE-5.1;
+este endpoint no recibe goles ni faltas.
+
+### Finalización del partido (BE-5.2)
+
+`POST /api/v1/partidos/:partidoId/finalizar`, sin cuerpo (se acepta `{}`), exige
+al árbitro asignado y estado `EN_CURSO`. Devuelve 200 con `partidoId`, estado
+`FINALIZADO`, `golesLocal`, `golesVisitante` y `finReal` (hora del servidor en UTC).
+No cambia los goles ni las faltas. Cuerpo con datos o identificador inválido: 400;
+sin sesión: 401; sin permiso: 403; partido inexistente: 404; otro estado: 409.
+
+Estado, `fin_real`, bitácora `FINALIZAR` y `PosicionesService.recalcular()` comparten
+una transacción `ReadCommitted`. Se bloquea temporada antes de partido
+(`FOR UPDATE`) y se revalidan asignación y estado después del bloqueo. Un fallo
+de bitácora o recálculo revierte todo. Dos finalizaciones simultáneas producen
+un 200 y un 409, sin duplicar puntos ni bitácora. BE-5.1 rechaza cambios posteriores.
+
+Después del commit se llama una vez por equipo a H20: módulo `RESULTADOS`,
+tipo `RESULTADO_FINALIZADO`, referencia `PARTIDO`, clave `partido-{id}-finalizado`.
+El título conserva el marcador y acorta solo los nombres con puntos suspensivos
+si excede 120 caracteres. El mensaje indica jornada y marcador. Cada envío se
+intenta independientemente; si falla, se registra partido, equipo y fecha y se
+mantiene la respuesta 200 con el resultado confirmado. No hay reintento automático
+ni cola persistente; repetir la finalización devuelve 409. La clave permite que
+un mecanismo futuro de reenvío use H20 sin duplicar avisos ya creados.
+
+Pruebas unitarias e integración verifican transiciones, autorización, recálculo,
+rollback, concurrencia y fallos de avisos, usando PostgreSQL para integración.
+
+### Participantes del partido (BE-5.5)
+
+`PUT /api/v1/partidos/:partidoId/participantes` exige al árbitro asignado y estado
+`EN_CURSO`. El cuerpo `{ jugadorIds: [...] }` reemplaza la lista completa: entre
+0 y 30 enteros positivos sin repetidos. `[]` vacía la lista. Se devuelve 200 con
+`partidoId`, `local` y `visitante`, cada lista con `{ id, nombre }`, ordenada por id.
+Cada jugador debe estar inscrito mediante `equipo_jugador` en uno de los dos
+equipos y en la temporada del partido; uno ajeno o inexistente devuelve 422.
+Arreglo inválido: 400; sin sesión: 401; sin permiso: 403; partido inexistente: 404;
+estado distinto de `EN_CURSO`: 409. Un partido finalizado requiere corrección H23.
+
+La transacción `ReadCommitted` bloquea temporada antes de partido y revalida
+asignación y estado después del bloqueo. Valida toda la lista antes de borrar;
+un fallo al insertar revierte también el borrado. Los reemplazos concurrentes no
+mezclan listas. No modifica marcador, bitácora de marcador ni posiciones.
+**Decisión acordada:** retirar participantes conserva íntegramente sus estadísticas
+H9, incluso al vaciar la lista; no se borran goles, asistencias ni tarjetas.
+Pruebas de DTO y de integración cubren reemplazo, vaciado, permisos, temporada,
+estados, rollback, concurrencia y conservación de H9. La mención de validación de
+goles en el cierre de Jira ya está cubierta por BE-5.1; esta tarea no recibe goles.
+
+### Regla reutilizable
+
+La sesión activa se valida con `JwtAuthGuard` global. Para las acciones de H5,
+`@ArbitroAsignado()` exige además rol `ARBITRO` y que `partido.arbitroId`
+coincida con el usuario autenticado. Otro árbitro, un jugador (capitán o no) o
+un organizador recibe 403 con `{ "mensaje": "No tienes permiso para esta acción." }`.
+Sin sesión válida o con cuenta inactiva se responde 401.
+
+Los rechazos de la regla se registran en el log con `usuarioId`, `partidoId`
+y `fecha`, sin tokens ni contraseñas. La regla no escribe en la base de datos.
+Un árbitro que consulta una acción sobre un partido inexistente recibe 404;
+un identificador inválido devuelve 400.
+
+El decorador se aplica a `PATCH /partidos/:partidoId/marcador` y
+`POST /partidos/:partidoId/iniciar`, `POST /partidos/:partidoId/finalizar` y
+`PUT /partidos/:partidoId/participantes`. Si la ruta usa `:id`, usar
+`@ArbitroAsignado('id')`.
+
+Los controladores de arbitraje deben estar autenticados, sin `@Public()` ni
+restricciones de rol heredadas del controlador del organizador: el guard de
+H5 debe procesar los roles rechazados para registrar el intento y devolver
+el contrato 403 indicado. `CalendarioModule` registra y exporta el guard y
+`ArbitroPartidoService`.
+
+Antes de cualquier escritura, el servicio de la acción también debe invocar
+`ArbitroPartidoService.exigirAsignacion(usuario, partido)` sobre la fila releída
+**dentro de su transacción y después de bloquearla**. El guard es un filtro de
+entrada; la comprobación transaccional evita usar una asignación que cambió
+entre la petición y la escritura. Mantener el orden de bloqueos del proyecto:
+temporada antes de partido cuando se necesiten ambas filas. La validación del
+estado y el 409 de un partido finalizado pertenecen al servicio de cada acción;
+ser árbitro asignado no autoriza transiciones de estado ni correcciones H23.

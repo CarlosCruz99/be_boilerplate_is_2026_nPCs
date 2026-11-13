@@ -18,10 +18,24 @@ import { PartidosService } from './services/partidos.service.js';
 import { AvisosCambioPartidoService } from './services/avisos-cambio-partido.service.js';
 import { CorreoCambioPartidoService } from './services/correo-cambio-partido.service.js';
 import { ResendCorreoService } from './services/resend-correo.service.js';
+import { ArbitroAsignadoGuard } from './autorizacion/arbitro-asignado.guard.js';
+import { ArbitroPartidoService } from './autorizacion/arbitro-partido.service.js';
+import { MarcadorController } from './controllers/marcador.controller.js';
+import { MarcadorService } from './services/marcador.service.js';
+import { IniciarPartidoController } from './controllers/iniciar-partido.controller.js';
+import { IniciarPartidoService } from './services/iniciar-partido.service.js';
+import { FinalizarPartidoController } from './controllers/finalizar-partido.controller.js';
+import { FinalizarPartidoService } from './services/finalizar-partido.service.js';
+import { ParticipantesController } from './controllers/participantes.controller.js';
+import { ParticipantesService } from './services/participantes.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    ParticipantesController,
+    FinalizarPartidoController,
+    IniciarPartidoController,
+    MarcadorController,
     CalendarioOrganizadorController,
     PublicacionJornadaController,
     ArbitrosController,
@@ -31,6 +45,12 @@ import { ResendCorreoService } from './services/resend-correo.service.js';
     ConsultaCalendarioController,
   ],
   providers: [
+    ParticipantesService,
+    FinalizarPartidoService,
+    IniciarPartidoService,
+    MarcadorService,
+    ArbitroAsignadoGuard,
+    ArbitroPartidoService,
     CalendarioOrganizadorService,
     PublicacionJornadaService,
     PartidosService,
@@ -40,5 +60,6 @@ import { ResendCorreoService } from './services/resend-correo.service.js';
     GeneracionCalendarioService,
     ConsultaCalendarioService,
   ],
+  exports: [ArbitroAsignadoGuard, ArbitroPartidoService],
 })
 export class CalendarioModule {}
