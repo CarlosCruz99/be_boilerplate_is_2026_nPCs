@@ -644,6 +644,32 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Autorización de las acciones del árbitro (BE-5.3)
 
+### Guardado del marcador (BE-5.1)
+
+`PATCH /api/v1/partidos/:partidoId/marcador` exige al árbitro asignado y estado
+`EN_CURSO`. El cuerpo debe incluir `golesLocal`, `golesVisitante`, `faltasLocal`
+y `faltasVisitante`, todos números enteros entre 0 y 99. Se permiten correcciones
+a la baja. Campos adicionales, valores ausentes, cadenas numéricas y valores
+fuera de rango devuelven 400. Cada guardado exitoso, incluso con los mismos
+valores, deja una fila `ACTUALIZAR` en `bitacora_marcador`.
+
+La respuesta 200 contiene `partidoId`, `estado`, los cuatro valores y
+`actualizadoEn`, tomado de la fecha persistida en esa fila de bitácora.
+El guardado y la bitácora son atómicos. La transacción `ReadCommitted` bloquea
+temporada y partido, en ese orden, y vuelve a comprobar la asignación y el estado
+antes de escribir. Si falla la bitácora, se revierte el marcador.
+
+Sin sesión se responde 401; sin permiso, 403; partido inexistente, 404;
+estado `PROGRAMADO`, `FINALIZADO` o `CANCELADO`, 409. El inicio (BE-5.4), la
+finalización (BE-5.2), los participantes (BE-5.5) y el detalle H6 corresponden a
+sus propias tareas. BE-5.1 no recalcula posiciones ni envía avisos de resultado final.
+
+Pruebas: `npm test` valida los DTO; `npm run test:e2e` prueba el endpoint,
+permisos, transacciones, rollback y dos guardados concurrentes con PostgreSQL.
+Usar una base dedicada a pruebas, con migraciones y seed aplicados.
+
+### Regla reutilizable
+
 La sesión activa se valida con `JwtAuthGuard` global. Para las acciones de H5,
 `@ArbitroAsignado()` exige además rol `ARBITRO` y que `partido.arbitroId`
 coincida con el usuario autenticado. Otro árbitro, un jugador (capitán o no) o
@@ -655,11 +681,11 @@ y `fecha`, sin tokens ni contraseñas. La regla no escribe en la base de datos.
 Un árbitro que consulta una acción sobre un partido inexistente recibe 404;
 un identificador inválido devuelve 400.
 
-Aplicar el decorador a los futuros endpoints `PATCH /partidos/:partidoId/marcador`,
+El decorador se aplica a `PATCH /partidos/:partidoId/marcador` y debe aplicarse a los futuros
 `POST /partidos/:partidoId/iniciar`, `POST /partidos/:partidoId/finalizar` y
 `PUT /partidos/:partidoId/participantes`. Si la ruta usa `:id`, usar
-`@ArbitroAsignado('id')`. Estos endpoints corresponden a BE-5.1/2/4/5 y todavía
-no se crean en BE-5.3.
+`@ArbitroAsignado('id')`. Los endpoints de iniciar, finalizar y participantes
+corresponden a BE-5.4/2/5 y siguen pendientes.
 
 Los controladores de arbitraje deben estar autenticados, sin `@Public()` ni
 restricciones de rol heredadas del controlador del organizador: el guard de

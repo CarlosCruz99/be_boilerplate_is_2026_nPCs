@@ -20,10 +20,13 @@ import { CorreoCambioPartidoService } from './services/correo-cambio-partido.ser
 import { ResendCorreoService } from './services/resend-correo.service.js';
 import { ArbitroAsignadoGuard } from './autorizacion/arbitro-asignado.guard.js';
 import { ArbitroPartidoService } from './autorizacion/arbitro-partido.service.js';
+import { MarcadorController } from './controllers/marcador.controller.js';
+import { MarcadorService } from './services/marcador.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    MarcadorController,
     CalendarioOrganizadorController,
     PublicacionJornadaController,
     ArbitrosController,
@@ -33,6 +36,7 @@ import { ArbitroPartidoService } from './autorizacion/arbitro-partido.service.js
     ConsultaCalendarioController,
   ],
   providers: [
+    MarcadorService,
     ArbitroAsignadoGuard,
     ArbitroPartidoService,
     CalendarioOrganizadorService,
