@@ -660,13 +660,39 @@ temporada y partido, en ese orden, y vuelve a comprobar la asignación y el esta
 antes de escribir. Si falla la bitácora, se revierte el marcador.
 
 Sin sesión se responde 401; sin permiso, 403; partido inexistente, 404;
-estado `PROGRAMADO`, `FINALIZADO` o `CANCELADO`, 409. El inicio (BE-5.4), la
+estado `PROGRAMADO`, `FINALIZADO` o `CANCELADO`, 409. La
 finalización (BE-5.2), los participantes (BE-5.5) y el detalle H6 corresponden a
 sus propias tareas. BE-5.1 no recalcula posiciones ni envía avisos de resultado final.
 
 Pruebas: `npm test` valida los DTO; `npm run test:e2e` prueba el endpoint,
 permisos, transacciones, rollback y dos guardados concurrentes con PostgreSQL.
 Usar una base dedicada a pruebas, con migraciones y seed aplicados.
+
+### Inicio del partido (BE-5.4)
+
+`POST /api/v1/partidos/:partidoId/iniciar`, sin cuerpo (se acepta `{}`), exige
+sesión activa y árbitro asignado. Solo permite `PROGRAMADO` → `EN_CURSO`.
+Devuelve 200 con `{ partidoId, estado: "EN_CURSO", inicioReal }`.
+La hora real la toma el servidor después de obtener los bloqueos; no se recibe
+del cliente. No hay restricción por hora programada ni por publicación de jornada,
+según la transición de H5 en el documento de decisiones (sección 5.2).
+
+Estado, `inicio_real` y una instantánea `INICIAR` en `bitacora_marcador` se
+guardan dentro de la misma transacción `ReadCommitted`, bloqueando temporada
+antes de partido y revalidando la asignación y el estado después del bloqueo.
+El marcador y las faltas se conservan. Un fallo de bitácora revierte el inicio.
+Dos inicios concurrentes producen un 200 y un 409, con una sola fila de bitácora.
+
+Sin sesión: 401; sin permiso: 403; partido inexistente: 404; identificador inválido
+o cuerpo con datos: 400. Un partido ya `EN_CURSO`, `FINALIZADO` o `CANCELADO`
+devuelve 409 con `No se puede cambiar de “{estado actual}” a “En curso”.`
+Un segundo inicio conserva la hora original y no agrega otra bitácora.
+El inicio permite usar a continuación el endpoint de marcador de BE-5.1.
+
+Pruebas: `npm test` verifica estados y revalidación de permisos; `npm run test:e2e`
+verifica el endpoint, persistencia, permisos, rollback y concurrencia con PostgreSQL.
+La validación de goles mencionada en el cierre de Jira ya se cubre en BE-5.1;
+este endpoint no recibe goles ni faltas.
 
 ### Regla reutilizable
 
@@ -681,11 +707,11 @@ y `fecha`, sin tokens ni contraseñas. La regla no escribe en la base de datos.
 Un árbitro que consulta una acción sobre un partido inexistente recibe 404;
 un identificador inválido devuelve 400.
 
-El decorador se aplica a `PATCH /partidos/:partidoId/marcador` y debe aplicarse a los futuros
-`POST /partidos/:partidoId/iniciar`, `POST /partidos/:partidoId/finalizar` y
+El decorador se aplica a `PATCH /partidos/:partidoId/marcador` y
+`POST /partidos/:partidoId/iniciar`; debe aplicarse a los futuros `POST /partidos/:partidoId/finalizar` y
 `PUT /partidos/:partidoId/participantes`. Si la ruta usa `:id`, usar
-`@ArbitroAsignado('id')`. Los endpoints de iniciar, finalizar y participantes
-corresponden a BE-5.4/2/5 y siguen pendientes.
+`@ArbitroAsignado('id')`. Los endpoints de finalizar y participantes
+corresponden a BE-5.2/5 y siguen pendientes.
 
 Los controladores de arbitraje deben estar autenticados, sin `@Public()` ni
 restricciones de rol heredadas del controlador del organizador: el guard de
