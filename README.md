@@ -720,6 +720,27 @@ un mecanismo futuro de reenvío use H20 sin duplicar avisos ya creados.
 Pruebas unitarias e integración verifican transiciones, autorización, recálculo,
 rollback, concurrencia y fallos de avisos, usando PostgreSQL para integración.
 
+### Participantes del partido (BE-5.5)
+
+`PUT /api/v1/partidos/:partidoId/participantes` exige al árbitro asignado y estado
+`EN_CURSO`. El cuerpo `{ jugadorIds: [...] }` reemplaza la lista completa: entre
+0 y 30 enteros positivos sin repetidos. `[]` vacía la lista. Se devuelve 200 con
+`partidoId`, `local` y `visitante`, cada lista con `{ id, nombre }`, ordenada por id.
+Cada jugador debe estar inscrito mediante `equipo_jugador` en uno de los dos
+equipos y en la temporada del partido; uno ajeno o inexistente devuelve 422.
+Arreglo inválido: 400; sin sesión: 401; sin permiso: 403; partido inexistente: 404;
+estado distinto de `EN_CURSO`: 409. Un partido finalizado requiere corrección H23.
+
+La transacción `ReadCommitted` bloquea temporada antes de partido y revalida
+asignación y estado después del bloqueo. Valida toda la lista antes de borrar;
+un fallo al insertar revierte también el borrado. Los reemplazos concurrentes no
+mezclan listas. No modifica marcador, bitácora de marcador ni posiciones.
+**Decisión acordada:** retirar participantes conserva íntegramente sus estadísticas
+H9, incluso al vaciar la lista; no se borran goles, asistencias ni tarjetas.
+Pruebas de DTO y de integración cubren reemplazo, vaciado, permisos, temporada,
+estados, rollback, concurrencia y conservación de H9. La mención de validación de
+goles en el cierre de Jira ya está cubierta por BE-5.1; esta tarea no recibe goles.
+
 ### Regla reutilizable
 
 La sesión activa se valida con `JwtAuthGuard` global. Para las acciones de H5,
@@ -734,9 +755,9 @@ Un árbitro que consulta una acción sobre un partido inexistente recibe 404;
 un identificador inválido devuelve 400.
 
 El decorador se aplica a `PATCH /partidos/:partidoId/marcador` y
-`POST /partidos/:partidoId/iniciar` y `POST /partidos/:partidoId/finalizar`; debe aplicarse al futuro
+`POST /partidos/:partidoId/iniciar`, `POST /partidos/:partidoId/finalizar` y
 `PUT /partidos/:partidoId/participantes`. Si la ruta usa `:id`, usar
-`@ArbitroAsignado('id')`. El endpoint de participantes corresponde a BE-5.5 y sigue pendiente.
+`@ArbitroAsignado('id')`.
 
 Los controladores de arbitraje deben estar autenticados, sin `@Public()` ni
 restricciones de rol heredadas del controlador del organizador: el guard de
