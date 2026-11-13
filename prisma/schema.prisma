@@ -261,6 +261,7 @@ model Partido {
   @@index([equipoLocalId, inicio], map: "ix_partido_local_inicio")
   @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
   @@index([temporadaId, jornadaId], map: "ix_partido_temporada_jornada")
+  @@index([estado, inicio(sort: Desc)], map: "ix_partido_estado_inicio")
   @@map("partido")
 }
 
@@ -382,6 +383,7 @@ model EstadisticaPartido {
   jugador Jugador @relation(fields: [jugadorId], references: [id])
 
   @@unique([partidoId, jugadorId])
+  @@index([jugadorId], map: "ix_estadistica_jugador")
   @@map("estadistica_partido")
 }
 
