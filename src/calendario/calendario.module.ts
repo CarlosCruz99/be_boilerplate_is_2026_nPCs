@@ -24,10 +24,13 @@ import { MarcadorController } from './controllers/marcador.controller.js';
 import { MarcadorService } from './services/marcador.service.js';
 import { IniciarPartidoController } from './controllers/iniciar-partido.controller.js';
 import { IniciarPartidoService } from './services/iniciar-partido.service.js';
+import { FinalizarPartidoController } from './controllers/finalizar-partido.controller.js';
+import { FinalizarPartidoService } from './services/finalizar-partido.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    FinalizarPartidoController,
     IniciarPartidoController,
     MarcadorController,
     CalendarioOrganizadorController,
@@ -39,6 +42,7 @@ import { IniciarPartidoService } from './services/iniciar-partido.service.js';
     ConsultaCalendarioController,
   ],
   providers: [
+    FinalizarPartidoService,
     IniciarPartidoService,
     MarcadorService,
     ArbitroAsignadoGuard,

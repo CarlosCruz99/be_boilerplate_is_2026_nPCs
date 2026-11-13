@@ -660,8 +660,8 @@ temporada y partido, en ese orden, y vuelve a comprobar la asignación y el esta
 antes de escribir. Si falla la bitácora, se revierte el marcador.
 
 Sin sesión se responde 401; sin permiso, 403; partido inexistente, 404;
-estado `PROGRAMADO`, `FINALIZADO` o `CANCELADO`, 409. La
-finalización (BE-5.2), los participantes (BE-5.5) y el detalle H6 corresponden a
+estado `PROGRAMADO`, `FINALIZADO` o `CANCELADO`, 409. Los
+participantes (BE-5.5) y el detalle H6 corresponden a
 sus propias tareas. BE-5.1 no recalcula posiciones ni envía avisos de resultado final.
 
 Pruebas: `npm test` valida los DTO; `npm run test:e2e` prueba el endpoint,
@@ -694,6 +694,32 @@ verifica el endpoint, persistencia, permisos, rollback y concurrencia con Postgr
 La validación de goles mencionada en el cierre de Jira ya se cubre en BE-5.1;
 este endpoint no recibe goles ni faltas.
 
+### Finalización del partido (BE-5.2)
+
+`POST /api/v1/partidos/:partidoId/finalizar`, sin cuerpo (se acepta `{}`), exige
+al árbitro asignado y estado `EN_CURSO`. Devuelve 200 con `partidoId`, estado
+`FINALIZADO`, `golesLocal`, `golesVisitante` y `finReal` (hora del servidor en UTC).
+No cambia los goles ni las faltas. Cuerpo con datos o identificador inválido: 400;
+sin sesión: 401; sin permiso: 403; partido inexistente: 404; otro estado: 409.
+
+Estado, `fin_real`, bitácora `FINALIZAR` y `PosicionesService.recalcular()` comparten
+una transacción `ReadCommitted`. Se bloquea temporada antes de partido
+(`FOR UPDATE`) y se revalidan asignación y estado después del bloqueo. Un fallo
+de bitácora o recálculo revierte todo. Dos finalizaciones simultáneas producen
+un 200 y un 409, sin duplicar puntos ni bitácora. BE-5.1 rechaza cambios posteriores.
+
+Después del commit se llama una vez por equipo a H20: módulo `RESULTADOS`,
+tipo `RESULTADO_FINALIZADO`, referencia `PARTIDO`, clave `partido-{id}-finalizado`.
+El título conserva el marcador y acorta solo los nombres con puntos suspensivos
+si excede 120 caracteres. El mensaje indica jornada y marcador. Cada envío se
+intenta independientemente; si falla, se registra partido, equipo y fecha y se
+mantiene la respuesta 200 con el resultado confirmado. No hay reintento automático
+ni cola persistente; repetir la finalización devuelve 409. La clave permite que
+un mecanismo futuro de reenvío use H20 sin duplicar avisos ya creados.
+
+Pruebas unitarias e integración verifican transiciones, autorización, recálculo,
+rollback, concurrencia y fallos de avisos, usando PostgreSQL para integración.
+
 ### Regla reutilizable
 
 La sesión activa se valida con `JwtAuthGuard` global. Para las acciones de H5,
@@ -708,10 +734,9 @@ Un árbitro que consulta una acción sobre un partido inexistente recibe 404;
 un identificador inválido devuelve 400.
 
 El decorador se aplica a `PATCH /partidos/:partidoId/marcador` y
-`POST /partidos/:partidoId/iniciar`; debe aplicarse a los futuros `POST /partidos/:partidoId/finalizar` y
+`POST /partidos/:partidoId/iniciar` y `POST /partidos/:partidoId/finalizar`; debe aplicarse al futuro
 `PUT /partidos/:partidoId/participantes`. Si la ruta usa `:id`, usar
-`@ArbitroAsignado('id')`. Los endpoints de finalizar y participantes
-corresponden a BE-5.2/5 y siguen pendientes.
+`@ArbitroAsignado('id')`. El endpoint de participantes corresponde a BE-5.5 y sigue pendiente.
 
 Los controladores de arbitraje deben estar autenticados, sin `@Public()` ni
 restricciones de rol heredadas del controlador del organizador: el guard de
