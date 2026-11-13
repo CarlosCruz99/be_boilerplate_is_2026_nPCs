@@ -18,6 +18,8 @@ import { PartidosService } from './services/partidos.service.js';
 import { AvisosCambioPartidoService } from './services/avisos-cambio-partido.service.js';
 import { CorreoCambioPartidoService } from './services/correo-cambio-partido.service.js';
 import { ResendCorreoService } from './services/resend-correo.service.js';
+import { ArbitroAsignadoGuard } from './autorizacion/arbitro-asignado.guard.js';
+import { ArbitroPartidoService } from './autorizacion/arbitro-partido.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
@@ -31,6 +33,8 @@ import { ResendCorreoService } from './services/resend-correo.service.js';
     ConsultaCalendarioController,
   ],
   providers: [
+    ArbitroAsignadoGuard,
+    ArbitroPartidoService,
     CalendarioOrganizadorService,
     PublicacionJornadaService,
     PartidosService,
@@ -40,5 +44,6 @@ import { ResendCorreoService } from './services/resend-correo.service.js';
     GeneracionCalendarioService,
     ConsultaCalendarioService,
   ],
+  exports: [ArbitroAsignadoGuard, ArbitroPartidoService],
 })
 export class CalendarioModule {}

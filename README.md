@@ -641,3 +641,37 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 - [BE-16.1: publicación y decisiones de integración](docs/be-16-1.md).
 - [Contrato central de avisos (H20)](docs/contrato-avisos.md).
+
+## Autorización de las acciones del árbitro (BE-5.3)
+
+La sesión activa se valida con `JwtAuthGuard` global. Para las acciones de H5,
+`@ArbitroAsignado()` exige además rol `ARBITRO` y que `partido.arbitroId`
+coincida con el usuario autenticado. Otro árbitro, un jugador (capitán o no) o
+un organizador recibe 403 con `{ "mensaje": "No tienes permiso para esta acción." }`.
+Sin sesión válida o con cuenta inactiva se responde 401.
+
+Los rechazos de la regla se registran en el log con `usuarioId`, `partidoId`
+y `fecha`, sin tokens ni contraseñas. La regla no escribe en la base de datos.
+Un árbitro que consulta una acción sobre un partido inexistente recibe 404;
+un identificador inválido devuelve 400.
+
+Aplicar el decorador a los futuros endpoints `PATCH /partidos/:partidoId/marcador`,
+`POST /partidos/:partidoId/iniciar`, `POST /partidos/:partidoId/finalizar` y
+`PUT /partidos/:partidoId/participantes`. Si la ruta usa `:id`, usar
+`@ArbitroAsignado('id')`. Estos endpoints corresponden a BE-5.1/2/4/5 y todavía
+no se crean en BE-5.3.
+
+Los controladores de arbitraje deben estar autenticados, sin `@Public()` ni
+restricciones de rol heredadas del controlador del organizador: el guard de
+H5 debe procesar los roles rechazados para registrar el intento y devolver
+el contrato 403 indicado. `CalendarioModule` registra y exporta el guard y
+`ArbitroPartidoService`.
+
+Antes de cualquier escritura, el servicio de la acción también debe invocar
+`ArbitroPartidoService.exigirAsignacion(usuario, partido)` sobre la fila releída
+**dentro de su transacción y después de bloquearla**. El guard es un filtro de
+entrada; la comprobación transaccional evita usar una asignación que cambió
+entre la petición y la escritura. Mantener el orden de bloqueos del proyecto:
+temporada antes de partido cuando se necesiten ambas filas. La validación del
+estado y el 409 de un partido finalizado pertenecen al servicio de cada acción;
+ser árbitro asignado no autoriza transiciones de estado ni correcciones H23.
