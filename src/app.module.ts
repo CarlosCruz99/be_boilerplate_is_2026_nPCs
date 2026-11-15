@@ -9,6 +9,7 @@ import { validateEnv } from '@Config';
 import { CalendarioModule } from './calendario/calendario.module.js';
 import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
+import { PagosModule } from './pagos/pagos.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CuotasModule } from './cuotas/cuotas.module.js';
     InscripcionesModule,
     CalendarioModule,
     CuotasModule,
+    PagosModule,
   ],
   providers: [
     {

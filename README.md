@@ -618,6 +618,46 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Pagos y comprobantes privados (BE-13.1)
+
+Solo una cuenta JUGADOR que capitanea el equipo puede usar:
+`GET /api/v1/equipos/:equipoId/cuotas?temporadaId=...` y
+`POST /api/v1/cuotas/:cuotaId/pagos` (multipart: monto, fechaPago, comprobante).
+Los importes de entrada/salida son cadenas decimales. Se calculan con enteros
+en céntimos o NUMERIC; no se redondean entradas con más de dos decimales.
+La fecha de pago no puede ser futura en America/El_Salvador. Los saldos se
+calculan mediante `fn_saldo_cuota`, sin almacenarlos por duplicado.
+
+Idempotency-Key es obligatoria (1–100 caracteres ASCII visibles sin espacios).
+Un mismo usuario, clave, cuota, monto normalizado, fecha y contenido binario
+devuelve el pago previo con 200 y **saldos actuales**. Un contenido distinto
+devuelve 409. El nombre y MIME declarados del archivo no forman parte de la
+identidad: se valida su contenido como PDF/JPEG/PNG, de 1 byte a 5 MiB.
+El registro nuevo devuelve 201, estado PENDIENTE y el mensaje de revisión.
+Los pendientes reservan disponible; los verificados bajan saldo; rechazados no
+aportan. Disponible insuficiente: 409 con disponible actualizado.
+
+Los comprobantes se guardan con UUID y permisos privados bajo
+`UPLOADS_DIR/comprobantes-privados`, sin rutas HTTP ni URL pública. No publicar
+ese directorio mediante un servidor estático. En producción debe persistirse
+el volumen de UPLOADS_DIR y respaldarse junto con la base. La descarga/revisión
+de comprobantes corresponde al flujo posterior H24; no se crea aquí.
+
+La transacción bloquea usuario (para serializar claves incluso entre cuotas)
+antes de cuota. El saldo se recalcula bajo el bloqueo compartido con H24 y el
+trigger de DB-13.1. Si falla el registro, el archivo nuevo se elimina; si falla
+la limpieza, se registra COMPROBANTE_HUERFANO para intervención. Un cierre brusco
+del proceso entre archivo y commit puede requerir reconciliación de huérfanos;
+no hay una tarea automática de reconciliación en BE-13.1.
+
+Después del commit se envía PAGO_REGISTRADO al capitán con referencia PAGO y
+clave H20 `pago-{id}`. Un fallo conserva el pago y añade `advertencia`; un
+reintento idempotente vuelve a intentar el aviso sin duplicarlo. No reenviar
+un pago con otra clave para recuperar un resultado incierto. El replay puede
+devolver un estado ya revisado (VERIFICADO/RECHAZADO), siempre sin crear otro.
+Las pruebas cubren saldos, permisos, archivo por contenido, idempotencia,
+concurrencia, rollback y eliminación de archivos ante fallos.
+
 ### Registro de cuotas (BE-12.1)
 
 `POST /api/v1/cuotas` es exclusivo de organizadores. Recibe `temporadaId`,
