@@ -28,10 +28,13 @@ import { FinalizarPartidoController } from './controllers/finalizar-partido.cont
 import { FinalizarPartidoService } from './services/finalizar-partido.service.js';
 import { ParticipantesController } from './controllers/participantes.controller.js';
 import { ParticipantesService } from './services/participantes.service.js';
+import { AsignacionArbitroController } from './controllers/asignacion-arbitro.controller.js';
+import { AsignacionArbitroService } from './services/asignacion-arbitro.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    AsignacionArbitroController,
     ParticipantesController,
     FinalizarPartidoController,
     IniciarPartidoController,
@@ -45,6 +48,7 @@ import { ParticipantesService } from './services/participantes.service.js';
     ConsultaCalendarioController,
   ],
   providers: [
+    AsignacionArbitroService,
     ParticipantesService,
     FinalizarPartidoService,
     IniciarPartidoService,

@@ -53,10 +53,13 @@ export class ConsultaCalendarioController {
   }
 
   @Get('partidos/:id')
+  @Roles('JUGADOR', 'ORGANIZADOR', 'ARBITRO')
   @Header('Cache-Control', 'no-store')
   @ApiParam({ name: 'id', schema: { type: 'integer', minimum: 1 } })
   @ApiOperation({
     summary: 'Consulta un partido con sus dos equipos, cancha y árbitro',
+    description:
+      'El árbitro asignado puede consultar partidos de jornadas publicadas; el sustituido pierde ese acceso.',
   })
   @ApiOkResponse({ type: DetallePartidoCalendarioDto })
   @ApiForbiddenResponse({
