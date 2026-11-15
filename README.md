@@ -618,6 +618,40 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Asignación del árbitro (BE-25.1)
+
+Solo ORGANIZADOR puede usar `GET /api/v1/partidos/:id/arbitros-disponibles`
+y `PUT /api/v1/partidos/:id/arbitro` con `{ arbitroId: UUID }`. Ambas rutas
+exigen partido PROGRAMADO. GET responde `{ partidoId, arbitros: [{ id, nombre }] }`,
+ordenados por nombre e id, activos y sin cruces en ninguna temporada. Incluye al
+árbitro actual si es elegible; no reserva disponibilidad. PUT responde
+`{ partidoId, arbitroId, arbitroNombre }`, incluso al elegir otra vez al mismo.
+El UUID coincide con Jira y el modelo actual; el documento antiguo que menciona
+`number` quedó superado por ese contrato.
+
+Sin sesión: 401; sin rol: 403; datos inválidos: 400; recurso inexistente: 404;
+estado o cruce: 409; candidato inactivo o de otro rol: 422 (decisión acordada).
+Los intervalos son [inicio, fin): horarios contiguos son válidos; un CANCELADO
+no ocupa al árbitro. Se permite asignar un PROGRAMADO cuyo inicio ya pasó.
+
+PUT bloquea temporada y partido, relee estado, bloquea al candidato para
+comprobar su elegibilidad y vuelve a comprobar cruces. La exclusión DB-3.1
+resuelve carreras entre temporadas. Si falla, conserva la asignación anterior.
+H3 ya aplica esa exclusión al crear/reprogramar; se mantienen sus validaciones.
+
+H5 comprueba la asignación desde la base en cada petición y después del bloqueo
+transaccional: el árbitro anterior pierde acceso inmediatamente. H9 todavía no
+tiene endpoints en esta versión; deberá reutilizar `@ArbitroAsignado()` y
+`ArbitroPartidoService.exigirAsignacion()` dentro de su transacción, después del
+bloqueo del partido. No se crean endpoints de estadísticas dentro de H25.
+H4 obtiene el árbitro vigente desde el partido y permite consultar el detalle al
+árbitro asignado, conservando la restricción de jornada publicada; el sustituido
+recibe 403. No se habilita al árbitro el listado de un equipo. Cambiar solo árbitro no genera
+avisos H15, que corresponden a cambios de fecha, hora o cancha.
+
+Pruebas cubren UUID, listado, sustitución, estados, permisos, revocación H5,
+cruces, horarios contiguos y asignaciones concurrentes entre temporadas.
+
 ### Pagos y comprobantes privados (BE-13.1)
 
 Solo una cuenta JUGADOR que capitanea el equipo puede usar:

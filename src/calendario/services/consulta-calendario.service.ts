@@ -139,7 +139,11 @@ export class ConsultaCalendarioService {
 
     const { local, visitante } = partido;
     if (usuario.rol !== 'ORGANIZADOR') {
-      if (!pertenece(local, usuario.id) && !pertenece(visitante, usuario.id)) {
+      if (
+        usuario.rol === 'ARBITRO'
+          ? partido.arbitro.id !== usuario.id
+          : !pertenece(local, usuario.id) && !pertenece(visitante, usuario.id)
+      ) {
         throw new ForbiddenException('No tienes acceso a este partido.');
       }
       if (
