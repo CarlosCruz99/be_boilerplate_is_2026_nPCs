@@ -8,6 +8,7 @@ import { PrismaModule } from '@Prisma';
 import { validateEnv } from '@Config';
 import { CalendarioModule } from './calendario/calendario.module.js';
 import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
+import { CuotasModule } from './cuotas/cuotas.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
     AuthModule,
     InscripcionesModule,
     CalendarioModule,
+    CuotasModule,
   ],
   providers: [
     {
