@@ -618,6 +618,31 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Registro de cuotas (BE-12.1)
+
+`POST /api/v1/cuotas` es exclusivo de organizadores. Recibe `temporadaId`,
+`equipoId`, `concepto` (`INSCRIPCION` o `ARBITRAJE`), `monto` como cadena decimal
+y `fechaVencimiento` como YYYY-MM-DD. Arbitraje exige `partidoId`; inscripción
+solo admite ausencia o null. El monto debe ser mayor que cero y hasta 100000.00,
+con máximo dos decimales; no se redondean entradas inválidas. Se responde con
+dinero como cadena de dos decimales y fechas civiles, sin conversión de zona.
+
+El equipo debe estar INSCRITO en la temporada. Arbitraje exige partido de esa
+temporada que incluya al equipo. **Decisión acordada:** un partido CANCELADO
+se rechaza con 422. La fecha no puede ser anterior a hoy en America/El_Salvador;
+se revalida después de bloquear temporada y partido dentro de la transacción.
+Los índices únicos de DB-12.1 impiden duplicados concurrentes (409).
+Formato inválido: 400; sin sesión: 401; sin permiso: 403; referencia inexistente:
+404; relaciones incompatibles: 422. El creador se toma de la sesión.
+
+Tras confirmar se envía un aviso H20 únicamente al capitán: PAGOS,
+CUOTA_REGISTRADA, referencia CUOTA, clave `cuota-{id}-registrada`.
+**Decisión acordada:** si falla, la cuota se conserva y se devuelve 201 con
+`advertencia: "La cuota se registró, pero no se pudo enviar el aviso al capitán."`.
+No repetir el registro para reenviar avisos; no hay reintento automático.
+Swagger documenta el contrato. Las pruebas verifican formatos, dinero exacto,
+fecha local, permisos, relaciones, concurrencia y fallos de avisos.
+
 | Script | Descripción |
 |---|---|
 | `start` | Compila y arranca la API |
