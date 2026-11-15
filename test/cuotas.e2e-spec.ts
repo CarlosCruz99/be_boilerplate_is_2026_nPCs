@@ -92,7 +92,7 @@ describe('BE-12.1: cuotas en PostgreSQL', () => {
   });
   afterEach(async () => {
     await db.query(
-      "DELETE FROM aviso WHERE referencia_tipo='CUOTA' AND referencia_id IN (SELECT id FROM cuota WHERE temporada_id=$1)",
+      "DELETE FROM aviso WHERE referencia_tipo='CUOTA' AND clave_idempotencia LIKE 'cuota-%' AND referencia_id IN (SELECT id FROM cuota WHERE temporada_id=$1)",
       [temporadaId],
     );
     await db.query('DELETE FROM cuota WHERE temporada_id=$1', [temporadaId]);
@@ -152,7 +152,7 @@ describe('BE-12.1: cuotas en PostgreSQL', () => {
     expect(a.body.partidoId).toBe(partidoId);
     const avisos = (
       await db.query(
-        "SELECT * FROM aviso WHERE referencia_tipo='CUOTA' AND referencia_id=ANY($1::int[])",
+        "SELECT * FROM aviso WHERE referencia_tipo='CUOTA' AND clave_idempotencia LIKE 'cuota-%' AND referencia_id=ANY($1::int[])",
         [[r.body.id, a.body.id]],
       )
     ).rows;
