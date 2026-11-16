@@ -10,6 +10,7 @@ import { CalendarioModule } from './calendario/calendario.module.js';
 import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
 import { PagosModule } from './pagos/pagos.module.js';
+import { GaleriaModule } from './galeria/galeria.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PagosModule } from './pagos/pagos.module.js';
     CalendarioModule,
     CuotasModule,
     PagosModule,
+    GaleriaModule,
   ],
   providers: [
     {
