@@ -38,7 +38,13 @@ $$ LANGUAGE sql;
 SELECT pg_temp.esperar('tabla pago creada', (SELECT count(*) FROM information_schema.tables WHERE table_name='pago'), 1);
 SELECT pg_temp.esperar('funcion fn_saldo_cuota creada', (SELECT count(*) FROM pg_proc WHERE proname='fn_saldo_cuota'), 1);
 
+SELECT (SELECT count(*) FROM pago) + (SELECT count(*) FROM cuota) AS base0 \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT t.id AS t1 FROM temporada t WHERE t.nombre='Apertura 2026' \gset
 SELECT id AS e1 FROM equipo WHERE temporada_id=:t1 ORDER BY id LIMIT 1 \gset
 SELECT id AS org FROM usuario WHERE rol='ORGANIZADOR' ORDER BY email LIMIT 1 \gset
@@ -105,5 +111,5 @@ SELECT pg_temp.esperar('varios pagos sin clave de idempotencia', pg_temp.filas(p
 SELECT pg_temp.debe_fallar('no se puede borrar una cuota con pagos', format('DELETE FROM cuota WHERE id=%s', :c1), '23503');
 ROLLBACK;
 
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan pagos ni cuotas', (SELECT count(*) FROM pago) + (SELECT count(*) FROM cuota), 0);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan los mismos pagos y cuotas (los del seed)', (SELECT count(*) FROM pago) + (SELECT count(*) FROM cuota), :base0);
 \echo 'Tabla pago y saldos (DB-13.1) verificados.'

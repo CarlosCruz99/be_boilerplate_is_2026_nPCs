@@ -637,7 +637,15 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 | `db:reset` | Resetea la base y vuelve a migrar |
 
 
+## Datos de prueba consolidados (DB-1.4)
+
+`npm run db:seed` carga, además de los equipos y el calendario, resultados de Apertura 2026 (18 partidos Finalizados,
+1 En curso, 47 Programados), 2 partidos Finalizados de Clausura 2025 y cuotas/pagos de los equipos 1 a 6.
+Es repetible (idempotente) y no depende de la fecha. Detalle y tabla de equipos: `docs/seed-consolidado.md`.
+Los comprobantes de pago son claves de prueba sin archivo físico. Las posiciones no se siembran: las calcula BE-8.1.
+
 ## Publicación de jornadas y avisos
 
 - [BE-16.1: publicación y decisiones de integración](docs/be-16-1.md).
 - [Contrato central de avisos (H20)](docs/contrato-avisos.md).
+

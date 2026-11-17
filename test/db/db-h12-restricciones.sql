@@ -27,7 +27,13 @@ BEGIN EXECUTE sentencia; GET DIAGNOSTICS n = ROW_COUNT; RETURN n; END $$ LANGUAG
 SELECT pg_temp.esperar('tabla cuota creada', (SELECT count(*) FROM information_schema.tables WHERE table_name='cuota'), 1);
 SELECT pg_temp.esperar('indices unicos parciales', (SELECT count(*) FROM pg_indexes WHERE tablename='cuota' AND indexname IN ('uq_cuota_inscripcion','uq_cuota_arbitraje')), 2);
 
+SELECT count(*) AS cuotas0 FROM cuota \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT t.id AS t1 FROM temporada t WHERE t.nombre='Apertura 2026' \gset
 SELECT id AS e1 FROM equipo WHERE temporada_id=:t1 ORDER BY id LIMIT 1 \gset
 SELECT id AS e2 FROM equipo WHERE temporada_id=:t1 ORDER BY id OFFSET 1 LIMIT 1 \gset
@@ -69,5 +75,5 @@ SELECT pg_temp.esperar('(aviso para BE-12.1) 10.005 se guarda como 10.01 sin err
 SELECT pg_temp.esperar('el monto guardado quedo redondeado a 10.01', (SELECT count(*) FROM cuota WHERE equipo_id=:eotra AND monto=10.01), 1);
 ROLLBACK;
 
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan cuotas', (SELECT count(*) FROM cuota), 0);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan las mismas cuotas (las del seed consolidado)', (SELECT count(*) FROM cuota), :cuotas0);
 \echo 'Tabla cuota (DB-12.1) verificada.'

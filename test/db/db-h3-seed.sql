@@ -1,5 +1,5 @@
 -- Verifica el seed de DB-3.2 (calendario de prueba de "Apertura 2026").
--- Correr ANTES de DB-1.4 (que cambia estados y marcadores) o ignorar la última comprobación.
+-- Vale antes y despues de DB-1.4 (que cambia estados y marcadores).
 -- Uso: docker exec -i si_be_postgres psql -U postgres -d si_be_boilerplate -v ON_ERROR_STOP=1 < test/db/db-h3-seed.sql
 CREATE FUNCTION pg_temp.esperar(caso text, obtenido bigint, esperado bigint) RETURNS void AS $$
 BEGIN
@@ -31,5 +31,5 @@ SELECT pg_temp.esperar('canchas distintas', (SELECT count(DISTINCT cancha_id) FR
 SELECT pg_temp.esperar('jornada 1 es el sabado 2026-11-07 08:00 hora de El Salvador', (SELECT count(*) FROM v WHERE jornada=1 AND (inicio AT TIME ZONE 'America/El_Salvador') = '2026-11-07 08:00'), 2);
 SELECT pg_temp.esperar('jornada 11 cae el 2027-01-16', (SELECT count(DISTINCT (inicio AT TIME ZONE 'America/El_Salvador')::date) FROM v WHERE jornada=11 AND (inicio AT TIME ZONE 'America/El_Salvador')::date='2027-01-16'), 1);
 SELECT pg_temp.esperar('partidos con duracion distinta de 90 min', (SELECT count(*) FROM v WHERE fin-inicio <> interval '90 minutes'), 0);
-SELECT pg_temp.esperar('partidos Programados (antes de DB-1.4)', (SELECT count(*) FROM v WHERE estado='PROGRAMADO'), 66);
+SELECT pg_temp.esperar('partidos Programados, En curso o Finalizados (ninguno Cancelado; con DB-1.4 hay 47 Programados)', (SELECT count(*) FROM v WHERE estado IN ('PROGRAMADO','EN_CURSO','FINALIZADO')), 66);
 \echo 'Seed de calendario verificado.'

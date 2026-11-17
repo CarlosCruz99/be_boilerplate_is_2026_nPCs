@@ -49,7 +49,13 @@ SELECT pg_temp.esperar('indice ix_cuota_equipo_temporada (equipo_id, temporada_i
   WHERE tablename='cuota' AND indexname='ix_cuota_equipo_temporada' AND indexdef LIKE '%(equipo_id, temporada_id)'), 1);
 SELECT pg_temp.esperar('la lista no selecciona comprobante_clave (clave privada)', (position('comprobante_clave' in pg_get_function_result('pg_temp.historial(int,int,text)'::regprocedure)) > 0)::int, 0);
 
+SELECT count(*) AS base0 FROM pago \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT id AS t1 FROM temporada WHERE nombre='Apertura 2026' \gset
 SELECT array_agg(id ORDER BY id) AS eqs FROM (SELECT id FROM equipo WHERE temporada_id=:t1 AND estado='INSCRITO' ORDER BY id LIMIT 3) x \gset
 SELECT (:'eqs'::int[])[1] AS e1, (:'eqs'::int[])[2] AS e2, (:'eqs'::int[])[3] AS e4 \gset
@@ -146,5 +152,5 @@ COMMIT;
 SELECT pg_temp.esperar('buscar cuotas por equipo y temporada usa el indice', (position('ix_escala_cuota' in :'plan_c') > 0)::int, 1);
 SELECT pg_temp.esperar('...sin recorrer la tabla completa', (position('Seq Scan' in :'plan_c') = 0)::int, 1);
 
-SELECT pg_temp.esperar('despues de las pruebas no quedan pagos', (SELECT count(*) FROM pago), 0);
+SELECT pg_temp.esperar('despues de las pruebas quedan los mismos pagos (los del seed)', (SELECT count(*) FROM pago), :base0);
 \echo 'Consultas del historial de pagos (DB-14.1) verificadas.'

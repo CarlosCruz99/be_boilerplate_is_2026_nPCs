@@ -8,6 +8,7 @@ import { seedCalendario } from './seed-calendario.js';
 import { seedAvisos } from './seed-avisos.js';
 import { seedEstadisticas } from './seed-estadisticas.js';
 import { seedGaleria } from './seed-galeria.js';
+import { seedConsolidado } from './seed-consolidado.js';
 
 const DEMO_EMAIL = 'demo@example.com';
 const DEMO_PASSWORD = 'Demo1234!';
@@ -39,6 +40,7 @@ async function main() {
   await seedAvisos(prisma);
   await seedEstadisticas(prisma);
   await seedGaleria(prisma);
+  await seedConsolidado(prisma);
 }
 
 try {

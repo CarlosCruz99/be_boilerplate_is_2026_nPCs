@@ -36,7 +36,13 @@ SELECT pg_temp.esperar('columnas de decision creadas', (SELECT count(*) FROM inf
 SELECT pg_temp.esperar('restriccion ck_pago_decision creada', (SELECT count(*) FROM pg_constraint WHERE conname='ck_pago_decision'), 1);
 SELECT pg_temp.esperar('indice parcial de pendientes creado', (SELECT count(*) FROM pg_indexes WHERE indexname='ix_pago_pendientes' AND indexdef LIKE '%PENDIENTE%'), 1);
 
+SELECT count(*) AS base0 FROM pago \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT t.id AS t1 FROM temporada t WHERE t.nombre='Apertura 2026' \gset
 SELECT id AS e1 FROM equipo WHERE temporada_id=:t1 ORDER BY id LIMIT 1 \gset
 SELECT id AS org FROM usuario WHERE rol='ORGANIZADOR' ORDER BY email LIMIT 1 \gset
@@ -86,5 +92,5 @@ SELECT pg_temp.debe_fallar('volver a PENDIENTE sin limpiar la decision', 'UPDATE
 SELECT pg_temp.esperar('un pendiente nuevo de 5', pg_temp.filas(pg_temp.ins('g1','PENDIENTE',NULL,NULL,NULL,:c1,:'cap')), 1);
 SELECT pg_temp.debe_fallar('datos de decision sobre un pago PENDIENTE', format('UPDATE pago SET verificado_por=%L WHERE comprobante_clave=''g1''', :'org'), '23514');
 ROLLBACK;
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan pagos', (SELECT count(*) FROM pago), 0);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan los mismos pagos (los del seed)', (SELECT count(*) FROM pago), :base0);
 \echo 'Decision de verificacion de pagos (DB-24.1) verificada.'

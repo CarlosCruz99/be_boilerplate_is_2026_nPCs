@@ -61,7 +61,13 @@ SELECT pg_temp.esperar('PROGRAMADO lee solo ~una pagina (<= 25 filas, no las ~16
 SELECT pg_temp.esperar('ningun plan recorre la tabla completa (sin Seq Scan)', (position('Seq Scan' in :'plan_en_curso' || :'plan_final' || :'plan_prog') = 0)::int, 1);
 
 -- ============ 3) Consultas de la lista y del detalle ============
+SELECT count(*) AS base0 FROM partido WHERE estado <> 'PROGRAMADO' \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT id AS p, temporada_id AS t, equipo_local_id AS loc, equipo_visitante_id AS vis, jornada_id AS jp FROM partido WHERE estado='PROGRAMADO' ORDER BY id LIMIT 1 \gset
 SELECT id AS p2, jornada_id AS j2 FROM partido WHERE estado='PROGRAMADO' AND jornada_id <> :jp ORDER BY id LIMIT 1 \gset
 SELECT id AS p3 FROM partido WHERE estado='PROGRAMADO' AND id NOT IN (:p, :p2) ORDER BY id LIMIT 1 \gset
@@ -136,5 +142,5 @@ SELECT pg_temp.esperar('orden: inicio descendente', (SELECT count(*) FROM (SELEC
 SELECT pg_temp.esperar('paginacion: LIMIT 20', (SELECT count(*) FROM pg_temp.lista(NULL, NULL, true, 20)), 20);
 ROLLBACK;
 
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan partidos finalizados', (SELECT count(*) FROM partido WHERE estado <> 'PROGRAMADO'), 0);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan los mismos partidos con resultado (los del seed)', (SELECT count(*) FROM partido WHERE estado <> 'PROGRAMADO'), :base0);
 \echo 'Indices y consultas de H6 (DB-6.1) verificados.'

@@ -68,5 +68,5 @@ ROLLBACK;
 
 SELECT pg_temp.esperar('despues del ROLLBACK la jornada sigue en Borrador', (SELECT count(*) FROM jornada WHERE estado='BORRADOR' AND publicada_en IS NULL),
   (SELECT count(*) FROM jornada WHERE estado='BORRADOR'));
-SELECT pg_temp.esperar('partidos intactos', (SELECT count(*) FROM partido), 66);
+SELECT pg_temp.esperar('partidos de Apertura intactos', (SELECT count(*) FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Apertura 2026')), 66);
 \echo 'Publicacion de jornadas (DB-16.1) verificada.'

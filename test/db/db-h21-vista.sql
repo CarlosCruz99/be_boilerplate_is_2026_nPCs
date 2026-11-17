@@ -30,7 +30,13 @@ END $$ LANGUAGE plpgsql;
 SELECT pg_temp.esperar('vista v_estado_pagos_equipo creada', (SELECT count(*) FROM information_schema.views WHERE table_name='v_estado_pagos_equipo'), 1);
 SELECT pg_temp.esperar('indice ix_cuota_equipo_temporada (DB-14.1) disponible para la vista', (SELECT count(*) FROM pg_indexes WHERE indexname='ix_cuota_equipo_temporada'), 1);
 
+SELECT (SELECT count(*) FROM cuota) + (SELECT count(*) FROM pago) AS base0 \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT (now() AT TIME ZONE 'America/El_Salvador')::date AS hoy \gset
 SELECT id AS t FROM temporada WHERE nombre='Apertura 2026' \gset
 SELECT array_agg(id ORDER BY id) AS eqs FROM (SELECT id FROM equipo WHERE temporada_id=:t AND estado='INSCRITO' ORDER BY id LIMIT 4) x \gset
@@ -111,5 +117,5 @@ SELECT pg_temp.debe_fallar('UPDATE sobre la vista', 'UPDATE v_estado_pagos_equip
 SELECT pg_temp.debe_fallar('DELETE sobre la vista', 'DELETE FROM v_estado_pagos_equipo', '55000');
 ROLLBACK;
 
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan cuotas ni pagos', (SELECT count(*) FROM cuota) + (SELECT count(*) FROM pago), 0);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan las mismas cuotas y pagos (los del seed)', (SELECT count(*) FROM cuota) + (SELECT count(*) FROM pago), :base0);
 \echo 'Vista v_estado_pagos_equipo (DB-21.1) verificada.'

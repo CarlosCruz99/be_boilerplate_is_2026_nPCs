@@ -29,9 +29,15 @@ SELECT pg_temp.esperar('columnas nuevas en partido', (SELECT count(*) FROM infor
 SELECT pg_temp.esperar('tablas bitacora_marcador y participacion_partido', (SELECT count(*) FROM information_schema.tables
   WHERE table_name IN ('bitacora_marcador','participacion_partido')), 2);
 SELECT pg_temp.esperar('partidos existentes con marcador 0-0 y faltas 0', (SELECT count(*) FROM partido
-  WHERE goles_local=0 AND goles_visitante=0 AND faltas_local=0 AND faltas_visitante=0), (SELECT count(*) FROM partido));
+  WHERE goles_local=0 AND goles_visitante=0 AND faltas_local=0 AND faltas_visitante=0), (SELECT count(*) FROM partido WHERE estado='PROGRAMADO'));
 
+SELECT (SELECT count(*) FROM participacion_partido) + (SELECT count(*) FROM bitacora_marcador) AS base0 \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 -- Un partido Programado y uno de equipos conocidos; un jugador por equipo.
 SELECT id AS p, equipo_local_id AS loc, equipo_visitante_id AS vis FROM partido WHERE estado='PROGRAMADO' ORDER BY id LIMIT 1 \gset
 SELECT jugador_id AS jloc FROM equipo_jugador WHERE equipo_id=:loc ORDER BY jugador_id LIMIT 1 \gset
@@ -79,6 +85,6 @@ SELECT pg_temp.debe_fallar('bitacora con goles fuera de rango', format($q$INSERT
 SELECT pg_temp.debe_fallar('no se puede borrar un usuario con bitacora', format('DELETE FROM usuario WHERE id=%L', :'u'), '23503');
 ROLLBACK;
 
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan participantes ni bitacora', (SELECT count(*) FROM participacion_partido) + (SELECT count(*) FROM bitacora_marcador), 0);
-SELECT pg_temp.esperar('partidos intactos', (SELECT count(*) FROM partido), 66);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan los mismos participantes y bitacora', (SELECT count(*) FROM participacion_partido) + (SELECT count(*) FROM bitacora_marcador), :base0);
+SELECT pg_temp.esperar('partidos de Apertura intactos', (SELECT count(*) FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Apertura 2026')), 66);
 \echo 'Marcador, bitacora y participantes (DB-5.1) verificados.'

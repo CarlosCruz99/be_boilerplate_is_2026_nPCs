@@ -31,6 +31,11 @@ CREATE FUNCTION pg_temp.detalle(p_jugador int, p_temporada int) RETURNS TABLE (p
 $$ LANGUAGE sql STABLE;
 
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT id AS t1 FROM temporada WHERE nombre='Apertura 2026' \gset
 SELECT ej.jugador_id AS j, ej.equipo_id AS eq FROM equipo_jugador ej WHERE ej.temporada_id=:t1 ORDER BY ej.equipo_id, ej.jugador_id LIMIT 1 \gset
 SELECT ej.jugador_id AS k FROM equipo_jugador ej WHERE ej.temporada_id=:t1 AND ej.equipo_id=:eq AND ej.jugador_id<>:j ORDER BY ej.jugador_id LIMIT 1 \gset

@@ -29,7 +29,13 @@ SELECT pg_temp.esperar('tabla estadistica_partido creada', (SELECT count(*) FROM
 SELECT pg_temp.esperar('claves foraneas INTEGER', (SELECT count(*) FROM information_schema.columns WHERE table_name='estadistica_partido'
   AND column_name IN ('partido_id','jugador_id') AND data_type='integer'), 2);
 
+SELECT count(*) AS base0 FROM estadistica_partido WHERE goles<>1 OR asistencias<>0 OR tarjetas<>1 \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT id AS p, temporada_id AS t, equipo_local_id AS loc, equipo_visitante_id AS vis FROM partido WHERE estado='PROGRAMADO' ORDER BY id LIMIT 1 \gset
 SELECT jugador_id AS jloc FROM equipo_jugador WHERE equipo_id=:loc ORDER BY jugador_id LIMIT 1 \gset
 SELECT jugador_id AS jvis FROM equipo_jugador WHERE equipo_id=:vis ORDER BY jugador_id LIMIT 1 \gset
@@ -67,5 +73,5 @@ SELECT pg_temp.esperar('Finalizado: la estadistica pasa a ser oficial sin tocar 
 SELECT pg_temp.esperar('goleadores oficiales de la temporada (solo partidos Finalizados)', (SELECT sum(e.goles) FROM estadistica_partido e JOIN partido p ON p.id=e.partido_id WHERE p.temporada_id=:t AND p.estado='FINALIZADO' AND e.partido_id=:p), 3);
 ROLLBACK;
 
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan filas de prueba', (SELECT count(*) FROM estadistica_partido WHERE goles<>1 OR asistencias<>0 OR tarjetas<>1), 0);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan las mismas filas (las del seed)', (SELECT count(*) FROM estadistica_partido WHERE goles<>1 OR asistencias<>0 OR tarjetas<>1), :base0);
 \echo 'Estadisticas por jugador y partido (DB-9.1) verificadas.'

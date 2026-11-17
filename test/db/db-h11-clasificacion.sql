@@ -27,6 +27,11 @@ RETURNS TABLE (jugador_id int, nombre text, total int, posicion int) AS $$
 $$ LANGUAGE sql STABLE;
 
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT id AS t1 FROM temporada WHERE nombre='Apertura 2026' \gset
 SELECT equipo_id AS eq FROM equipo_jugador WHERE temporada_id=:t1 GROUP BY equipo_id HAVING count(*) >= 6 ORDER BY equipo_id LIMIT 1 \gset
 SELECT array_agg(jugador_id ORDER BY jugador_id) AS js FROM (SELECT jugador_id FROM equipo_jugador WHERE equipo_id=:eq ORDER BY jugador_id LIMIT 6) x \gset
