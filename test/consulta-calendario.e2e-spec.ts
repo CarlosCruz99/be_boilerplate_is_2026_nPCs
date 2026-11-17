@@ -273,6 +273,12 @@ describe('BE-4.1 calendario del equipo', () => {
         .expect(403);
     }
 
+    const {
+      rows: [historial],
+    } = await db.query<{ ultimo: number }>(
+      'SELECT COALESCE(max(id), 0) AS ultimo FROM cambio_partido WHERE partido_id = $1',
+      [original.id],
+    );
     try {
       await client()
         .patch(url)
@@ -317,6 +323,22 @@ describe('BE-4.1 calendario del equipo', () => {
         (await detalle(original.id, organizador).expect(200)).body,
       ).toMatchObject({ estado: 'CANCELADO' });
     } finally {
+      const cambios =
+        'SELECT id FROM cambio_partido WHERE partido_id = $1 AND id > $2';
+      await db.query(
+        `DELETE FROM entrega_correo WHERE cambio_id IN (${cambios})`,
+        [original.id, historial.ultimo],
+      );
+      await db.query(
+        `DELETE FROM aviso WHERE clave_idempotencia IN (
+           SELECT 'cambio-partido-' || id FROM (${cambios}) AS cambios
+         )`,
+        [original.id, historial.ultimo],
+      );
+      await db.query(
+        'DELETE FROM cambio_partido WHERE partido_id = $1 AND id > $2',
+        [original.id, historial.ultimo],
+      );
       await db.query(
         'UPDATE partido SET cancha_id = $2, arbitro_id = $3, inicio = $4, fin = $5, estado = $6 WHERE id = $1',
         [

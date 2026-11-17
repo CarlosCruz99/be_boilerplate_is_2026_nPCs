@@ -5,11 +5,19 @@ Migración: `20261111160000_db_17_1_contenido_galeria`
 ## Estrategia de almacenamiento (decisión: local privado)
 
 - El archivo **no** se guarda en la BD. Vive en un directorio privado del servidor (fuera de `public/`, no servido como estático).
-- La BD guarda solo metadatos y `storage_key`: una clave relativa aleatoria (por ejemplo `galeria/<uuid>.jpg`). Nunca se guarda una ruta absoluta ni el nombre original como nombre en disco.
+- La BD guarda los metadatos y una clave relativa `storage_key` con una huella de la subida y un UUID aleatorio. El nombre original se guarda como metadato.
 - Descarga: endpoint autenticado que hace streaming leyendo `storage_key`.
 - Subida: 1) guardar archivo, 2) insertar metadatos. Si el INSERT falla (p. ej. límite de 30), el backend borra el archivo.
 - Borrado: primero lógico (`estado = ELIMINADO`, `eliminado_en`, `eliminado_por`); el borrado físico es posterior.
 - Las filas del seed **no tienen archivo físico**; el frontend/BE debe tolerar archivo ausente.
+
+## Subida de contenido (BE-17.1)
+
+- `POST /api/v1/partidos/{partidoId}/galeria` requiere el JWT de un organizador.
+- Envía entre 1 y 30 archivos como campos repetidos `archivos[]` en `multipart/form-data`. El campo de texto opcional `descripcion` aplica al lote y admite hasta 200 caracteres.
+- Se admite JPG/JPEG o PNG de hasta 5 MiB y MP4 de hasta 50 MiB. El servidor valida el tipo a partir del contenido del archivo.
+- La respuesta 200 incluye `partidoId`, `totalActivos`, `limite` y `resultados` en el orden enviado. Cada resultado incluye `nombre` y `estado`, con `contenidoId` si quedó `PUBLICADO` o `motivo` si quedó en `ERROR`.
+- Una subida con el mismo partido, organizador, nombre, descripción y bytes devuelve el identificador de la publicación activa anterior. Se puede enviar un archivo por solicitud para mostrar su avance y controlar su reintento de manera individual.
 
 ## ER
 

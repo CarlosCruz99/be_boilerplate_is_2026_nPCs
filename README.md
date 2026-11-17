@@ -618,6 +618,105 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Asignación del árbitro (BE-25.1)
+
+Solo ORGANIZADOR puede usar `GET /api/v1/partidos/:id/arbitros-disponibles`
+y `PUT /api/v1/partidos/:id/arbitro` con `{ arbitroId: UUID }`. Ambas rutas
+exigen partido PROGRAMADO. GET responde `{ partidoId, arbitros: [{ id, nombre }] }`,
+ordenados por nombre e id, activos y sin cruces en ninguna temporada. Incluye al
+árbitro actual si es elegible; no reserva disponibilidad. PUT responde
+`{ partidoId, arbitroId, arbitroNombre }`, incluso al elegir otra vez al mismo.
+El UUID coincide con Jira y el modelo actual; el documento antiguo que menciona
+`number` quedó superado por ese contrato.
+
+Sin sesión: 401; sin rol: 403; datos inválidos: 400; recurso inexistente: 404;
+estado o cruce: 409; candidato inactivo o de otro rol: 422 (decisión acordada).
+Los intervalos son [inicio, fin): horarios contiguos son válidos; un CANCELADO
+no ocupa al árbitro. Se permite asignar un PROGRAMADO cuyo inicio ya pasó.
+
+PUT bloquea temporada y partido, relee estado, bloquea al candidato para
+comprobar su elegibilidad y vuelve a comprobar cruces. La exclusión DB-3.1
+resuelve carreras entre temporadas. Si falla, conserva la asignación anterior.
+H3 ya aplica esa exclusión al crear/reprogramar; se mantienen sus validaciones.
+
+H5 comprueba la asignación desde la base en cada petición y después del bloqueo
+transaccional: el árbitro anterior pierde acceso inmediatamente. H9 todavía no
+tiene endpoints en esta versión; deberá reutilizar `@ArbitroAsignado()` y
+`ArbitroPartidoService.exigirAsignacion()` dentro de su transacción, después del
+bloqueo del partido. No se crean endpoints de estadísticas dentro de H25.
+H4 obtiene el árbitro vigente desde el partido y permite consultar el detalle al
+árbitro asignado, conservando la restricción de jornada publicada; el sustituido
+recibe 403. No se habilita al árbitro el listado de un equipo. Cambiar solo árbitro no genera
+avisos H15, que corresponden a cambios de fecha, hora o cancha.
+
+Pruebas cubren UUID, listado, sustitución, estados, permisos, revocación H5,
+cruces, horarios contiguos y asignaciones concurrentes entre temporadas.
+
+### Pagos y comprobantes privados (BE-13.1)
+
+Solo una cuenta JUGADOR que capitanea el equipo puede usar:
+`GET /api/v1/equipos/:equipoId/cuotas?temporadaId=...` y
+`POST /api/v1/cuotas/:cuotaId/pagos` (multipart: monto, fechaPago, comprobante).
+Los importes de entrada/salida son cadenas decimales. Se calculan con enteros
+en céntimos o NUMERIC; no se redondean entradas con más de dos decimales.
+La fecha de pago no puede ser futura en America/El_Salvador. Los saldos se
+calculan mediante `fn_saldo_cuota`, sin almacenarlos por duplicado.
+
+Idempotency-Key es obligatoria (1–100 caracteres ASCII visibles sin espacios).
+Un mismo usuario, clave, cuota, monto normalizado, fecha y contenido binario
+devuelve el pago previo con 200 y **saldos actuales**. Un contenido distinto
+devuelve 409. El nombre y MIME declarados del archivo no forman parte de la
+identidad: se valida su contenido como PDF/JPEG/PNG, de 1 byte a 5 MiB.
+El registro nuevo devuelve 201, estado PENDIENTE y el mensaje de revisión.
+Los pendientes reservan disponible; los verificados bajan saldo; rechazados no
+aportan. Disponible insuficiente: 409 con disponible actualizado.
+
+Los comprobantes se guardan con UUID y permisos privados bajo
+`UPLOADS_DIR/comprobantes-privados`, sin rutas HTTP ni URL pública. No publicar
+ese directorio mediante un servidor estático. En producción debe persistirse
+el volumen de UPLOADS_DIR y respaldarse junto con la base. La descarga/revisión
+de comprobantes corresponde al flujo posterior H24; no se crea aquí.
+
+La transacción bloquea usuario (para serializar claves incluso entre cuotas)
+antes de cuota. El saldo se recalcula bajo el bloqueo compartido con H24 y el
+trigger de DB-13.1. Si falla el registro, el archivo nuevo se elimina; si falla
+la limpieza, se registra COMPROBANTE_HUERFANO para intervención. Un cierre brusco
+del proceso entre archivo y commit puede requerir reconciliación de huérfanos;
+no hay una tarea automática de reconciliación en BE-13.1.
+
+Después del commit se envía PAGO_REGISTRADO al capitán con referencia PAGO y
+clave H20 `pago-{id}`. Un fallo conserva el pago y añade `advertencia`; un
+reintento idempotente vuelve a intentar el aviso sin duplicarlo. No reenviar
+un pago con otra clave para recuperar un resultado incierto. El replay puede
+devolver un estado ya revisado (VERIFICADO/RECHAZADO), siempre sin crear otro.
+Las pruebas cubren saldos, permisos, archivo por contenido, idempotencia,
+concurrencia, rollback y eliminación de archivos ante fallos.
+
+### Registro de cuotas (BE-12.1)
+
+`POST /api/v1/cuotas` es exclusivo de organizadores. Recibe `temporadaId`,
+`equipoId`, `concepto` (`INSCRIPCION` o `ARBITRAJE`), `monto` como cadena decimal
+y `fechaVencimiento` como YYYY-MM-DD. Arbitraje exige `partidoId`; inscripción
+solo admite ausencia o null. El monto debe ser mayor que cero y hasta 100000.00,
+con máximo dos decimales; no se redondean entradas inválidas. Se responde con
+dinero como cadena de dos decimales y fechas civiles, sin conversión de zona.
+
+El equipo debe estar INSCRITO en la temporada. Arbitraje exige partido de esa
+temporada que incluya al equipo. **Decisión acordada:** un partido CANCELADO
+se rechaza con 422. La fecha no puede ser anterior a hoy en America/El_Salvador;
+se revalida después de bloquear temporada y partido dentro de la transacción.
+Los índices únicos de DB-12.1 impiden duplicados concurrentes (409).
+Formato inválido: 400; sin sesión: 401; sin permiso: 403; referencia inexistente:
+404; relaciones incompatibles: 422. El creador se toma de la sesión.
+
+Tras confirmar se envía un aviso H20 únicamente al capitán: PAGOS,
+CUOTA_REGISTRADA, referencia CUOTA, clave `cuota-{id}-registrada`.
+**Decisión acordada:** si falla, la cuota se conserva y se devuelve 201 con
+`advertencia: "La cuota se registró, pero no se pudo enviar el aviso al capitán."`.
+No repetir el registro para reenviar avisos; no hay reintento automático.
+Swagger documenta el contrato. Las pruebas verifican formatos, dinero exacto,
+fecha local, permisos, relaciones, concurrencia y fallos de avisos.
+
 | Script | Descripción |
 |---|---|
 | `start` | Compila y arranca la API |
@@ -649,3 +748,134 @@ Los comprobantes de pago son claves de prueba sin archivo físico. Las posicione
 - [BE-16.1: publicación y decisiones de integración](docs/be-16-1.md).
 - [Contrato central de avisos (H20)](docs/contrato-avisos.md).
 
+## Autorización de las acciones del árbitro (BE-5.3)
+
+### Guardado del marcador (BE-5.1)
+
+`PATCH /api/v1/partidos/:partidoId/marcador` exige al árbitro asignado y estado
+`EN_CURSO`. El cuerpo debe incluir `golesLocal`, `golesVisitante`, `faltasLocal`
+y `faltasVisitante`, todos números enteros entre 0 y 99. Se permiten correcciones
+a la baja. Campos adicionales, valores ausentes, cadenas numéricas y valores
+fuera de rango devuelven 400. Cada guardado exitoso, incluso con los mismos
+valores, deja una fila `ACTUALIZAR` en `bitacora_marcador`.
+
+La respuesta 200 contiene `partidoId`, `estado`, los cuatro valores y
+`actualizadoEn`, tomado de la fecha persistida en esa fila de bitácora.
+El guardado y la bitácora son atómicos. La transacción `ReadCommitted` bloquea
+temporada y partido, en ese orden, y vuelve a comprobar la asignación y el estado
+antes de escribir. Si falla la bitácora, se revierte el marcador.
+
+Sin sesión se responde 401; sin permiso, 403; partido inexistente, 404;
+estado `PROGRAMADO`, `FINALIZADO` o `CANCELADO`, 409. Los
+participantes (BE-5.5) y el detalle H6 corresponden a
+sus propias tareas. BE-5.1 no recalcula posiciones ni envía avisos de resultado final.
+
+Pruebas: `npm test` valida los DTO; `npm run test:e2e` prueba el endpoint,
+permisos, transacciones, rollback y dos guardados concurrentes con PostgreSQL.
+Usar una base dedicada a pruebas, con migraciones y seed aplicados.
+
+### Inicio del partido (BE-5.4)
+
+`POST /api/v1/partidos/:partidoId/iniciar`, sin cuerpo (se acepta `{}`), exige
+sesión activa y árbitro asignado. Solo permite `PROGRAMADO` → `EN_CURSO`.
+Devuelve 200 con `{ partidoId, estado: "EN_CURSO", inicioReal }`.
+La hora real la toma el servidor después de obtener los bloqueos; no se recibe
+del cliente. No hay restricción por hora programada ni por publicación de jornada,
+según la transición de H5 en el documento de decisiones (sección 5.2).
+
+Estado, `inicio_real` y una instantánea `INICIAR` en `bitacora_marcador` se
+guardan dentro de la misma transacción `ReadCommitted`, bloqueando temporada
+antes de partido y revalidando la asignación y el estado después del bloqueo.
+El marcador y las faltas se conservan. Un fallo de bitácora revierte el inicio.
+Dos inicios concurrentes producen un 200 y un 409, con una sola fila de bitácora.
+
+Sin sesión: 401; sin permiso: 403; partido inexistente: 404; identificador inválido
+o cuerpo con datos: 400. Un partido ya `EN_CURSO`, `FINALIZADO` o `CANCELADO`
+devuelve 409 con `No se puede cambiar de “{estado actual}” a “En curso”.`
+Un segundo inicio conserva la hora original y no agrega otra bitácora.
+El inicio permite usar a continuación el endpoint de marcador de BE-5.1.
+
+Pruebas: `npm test` verifica estados y revalidación de permisos; `npm run test:e2e`
+verifica el endpoint, persistencia, permisos, rollback y concurrencia con PostgreSQL.
+La validación de goles mencionada en el cierre de Jira ya se cubre en BE-5.1;
+este endpoint no recibe goles ni faltas.
+
+### Finalización del partido (BE-5.2)
+
+`POST /api/v1/partidos/:partidoId/finalizar`, sin cuerpo (se acepta `{}`), exige
+al árbitro asignado y estado `EN_CURSO`. Devuelve 200 con `partidoId`, estado
+`FINALIZADO`, `golesLocal`, `golesVisitante` y `finReal` (hora del servidor en UTC).
+No cambia los goles ni las faltas. Cuerpo con datos o identificador inválido: 400;
+sin sesión: 401; sin permiso: 403; partido inexistente: 404; otro estado: 409.
+
+Estado, `fin_real`, bitácora `FINALIZAR` y `PosicionesService.recalcular()` comparten
+una transacción `ReadCommitted`. Se bloquea temporada antes de partido
+(`FOR UPDATE`) y se revalidan asignación y estado después del bloqueo. Un fallo
+de bitácora o recálculo revierte todo. Dos finalizaciones simultáneas producen
+un 200 y un 409, sin duplicar puntos ni bitácora. BE-5.1 rechaza cambios posteriores.
+
+Después del commit se llama una vez por equipo a H20: módulo `RESULTADOS`,
+tipo `RESULTADO_FINALIZADO`, referencia `PARTIDO`, clave `partido-{id}-finalizado`.
+El título conserva el marcador y acorta solo los nombres con puntos suspensivos
+si excede 120 caracteres. El mensaje indica jornada y marcador. Cada envío se
+intenta independientemente; si falla, se registra partido, equipo y fecha y se
+mantiene la respuesta 200 con el resultado confirmado. No hay reintento automático
+ni cola persistente; repetir la finalización devuelve 409. La clave permite que
+un mecanismo futuro de reenvío use H20 sin duplicar avisos ya creados.
+
+Pruebas unitarias e integración verifican transiciones, autorización, recálculo,
+rollback, concurrencia y fallos de avisos, usando PostgreSQL para integración.
+
+### Participantes del partido (BE-5.5)
+
+`PUT /api/v1/partidos/:partidoId/participantes` exige al árbitro asignado y estado
+`EN_CURSO`. El cuerpo `{ jugadorIds: [...] }` reemplaza la lista completa: entre
+0 y 30 enteros positivos sin repetidos. `[]` vacía la lista. Se devuelve 200 con
+`partidoId`, `local` y `visitante`, cada lista con `{ id, nombre }`, ordenada por id.
+Cada jugador debe estar inscrito mediante `equipo_jugador` en uno de los dos
+equipos y en la temporada del partido; uno ajeno o inexistente devuelve 422.
+Arreglo inválido: 400; sin sesión: 401; sin permiso: 403; partido inexistente: 404;
+estado distinto de `EN_CURSO`: 409. Un partido finalizado requiere corrección H23.
+
+La transacción `ReadCommitted` bloquea temporada antes de partido y revalida
+asignación y estado después del bloqueo. Valida toda la lista antes de borrar;
+un fallo al insertar revierte también el borrado. Los reemplazos concurrentes no
+mezclan listas. No modifica marcador, bitácora de marcador ni posiciones.
+**Decisión acordada:** retirar participantes conserva íntegramente sus estadísticas
+H9, incluso al vaciar la lista; no se borran goles, asistencias ni tarjetas.
+Pruebas de DTO y de integración cubren reemplazo, vaciado, permisos, temporada,
+estados, rollback, concurrencia y conservación de H9. La mención de validación de
+goles en el cierre de Jira ya está cubierta por BE-5.1; esta tarea no recibe goles.
+
+### Regla reutilizable
+
+La sesión activa se valida con `JwtAuthGuard` global. Para las acciones de H5,
+`@ArbitroAsignado()` exige además rol `ARBITRO` y que `partido.arbitroId`
+coincida con el usuario autenticado. Otro árbitro, un jugador (capitán o no) o
+un organizador recibe 403 con `{ "mensaje": "No tienes permiso para esta acción." }`.
+Sin sesión válida o con cuenta inactiva se responde 401.
+
+Los rechazos de la regla se registran en el log con `usuarioId`, `partidoId`
+y `fecha`, sin tokens ni contraseñas. La regla no escribe en la base de datos.
+Un árbitro que consulta una acción sobre un partido inexistente recibe 404;
+un identificador inválido devuelve 400.
+
+El decorador se aplica a `PATCH /partidos/:partidoId/marcador` y
+`POST /partidos/:partidoId/iniciar`, `POST /partidos/:partidoId/finalizar` y
+`PUT /partidos/:partidoId/participantes`. Si la ruta usa `:id`, usar
+`@ArbitroAsignado('id')`.
+
+Los controladores de arbitraje deben estar autenticados, sin `@Public()` ni
+restricciones de rol heredadas del controlador del organizador: el guard de
+H5 debe procesar los roles rechazados para registrar el intento y devolver
+el contrato 403 indicado. `CalendarioModule` registra y exporta el guard y
+`ArbitroPartidoService`.
+
+Antes de cualquier escritura, el servicio de la acción también debe invocar
+`ArbitroPartidoService.exigirAsignacion(usuario, partido)` sobre la fila releída
+**dentro de su transacción y después de bloquearla**. El guard es un filtro de
+entrada; la comprobación transaccional evita usar una asignación que cambió
+entre la petición y la escritura. Mantener el orden de bloqueos del proyecto:
+temporada antes de partido cuando se necesiten ambas filas. La validación del
+estado y el 409 de un partido finalizado pertenecen al servicio de cada acción;
+ser árbitro asignado no autoriza transiciones de estado ni correcciones H23.
