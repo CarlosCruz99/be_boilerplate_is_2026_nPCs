@@ -60,14 +60,7 @@ export async function seedCalendario(prisma: PrismaClient): Promise<void> {
     const existente = await prisma.cancha.findFirst({
       where: { nombre: { equals: c.nombre, mode: 'insensitive' } },
     });
-    const fila = existente
-      ? await prisma.cancha.update({
-          where: { id: existente.id },
-          data: { direccion: c.direccion, activa: true },
-        })
-      : await prisma.cancha.create({
-          data: { nombre: c.nombre, direccion: c.direccion },
-        });
+    const fila = existente ?? (await prisma.cancha.create({ data: { nombre: c.nombre, direccion: c.direccion } }));
     canchaIds.push(fila.id);
   }
 
@@ -104,7 +97,7 @@ export async function seedCalendario(prisma: PrismaClient): Promise<void> {
 
   // 4. Partidos
   let creados = 0;
-  let actualizados = 0;
+  let yaExistian = 0;
   for (const p of calendario.partidos) {
     const clave = {
       temporadaId: temporada.id,
@@ -118,24 +111,15 @@ export async function seedCalendario(prisma: PrismaClient): Promise<void> {
       inicio: p.inicio,
       fin: p.fin,
     };
-    const existente = await prisma.partido.findFirst({
-      where: clave,
-      select: { id: true },
-    });
+    const existente = await prisma.partido.findFirst({ where: clave, select: { id: true } });
     if (existente) {
-      await prisma.partido.update({
-        where: { id: existente.id },
-        data: horario,
-      });
-      actualizados += 1;
+      yaExistian += 1; // no se reponen horarios: se conservan las reprogramaciones hechas desde la app
     } else {
-      await prisma.partido.create({
-        data: { ...clave, ...horario, estado: 'PROGRAMADO' },
-      });
+      await prisma.partido.create({ data: { ...clave, ...horario, estado: 'PROGRAMADO' } });
       creados += 1;
     }
   }
   console.log(
-    `Seed calendario listo: ${calendario.jornadas.length} jornadas, ${calendario.partidos.length} partidos (${creados} nuevos, ${actualizados} ya existían).`,
+    `Seed calendario listo: ${calendario.jornadas.length} jornadas, ${calendario.partidos.length} partidos (${creados} nuevos, ${yaExistian} ya existían).`,
   );
 }

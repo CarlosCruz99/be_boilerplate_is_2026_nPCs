@@ -28,8 +28,9 @@ const MIN = 60_000;
  * Las posiciones NO se siembran: las calcula BE-8.1.
  *
  * Idempotente y respetuoso con lo que el backend haya hecho:
- *  - un partido solo se actualiza si sigue PROGRAMADO (no se pisa un resultado que BE ya cambió);
- *  - participantes y estadísticas se insertan con skipDuplicates y los pagos solo si su comprobante aún no existe;
+ *  - un partido solo se actualiza si sigue PROGRAMADO, y sus participantes y estadísticas se guardan en la misma
+ *    transacción solo en ese caso (no se pisa ni se ensucia un resultado que BE ya cambió);
+ *  - los pagos se insertan solo si su comprobante aún no existe;
  *  - cuotas se buscan por (equipo, concepto, partido) antes de crearse.
  * Los comprobantes de los pagos son claves de prueba sin archivo físico.
  */
@@ -47,7 +48,7 @@ export async function seedConsolidado(prisma: PrismaClient): Promise<void> {
   }
   const plantillasApertura = await plantillasDe(prisma, apertura.id);
   const resultadosApertura = buildResultadosApertura(partidosApertura, plantillasApertura);
-  const actualizados = await aplicar(prisma, resultadosApertura);
+  const actualizados = await aplicarResultados(prisma, resultadosApertura);
 
   // ---------- Clausura 2025: jornada, 2 partidos Finalizados ----------
   const clausura = await prisma.temporada.findUnique({ where: { nombre: CLAUSURA_2025.nombre } });
@@ -55,7 +56,7 @@ export async function seedConsolidado(prisma: PrismaClient): Promise<void> {
   const partidosClausura = await asegurarPartidosClausura(prisma, clausura.id, organizador.id);
   const plantillasClausura = await plantillasDe(prisma, clausura.id);
   const resultadosClausura = buildResultadosClausura(partidosClausura, plantillasClausura);
-  const actualizadosClausura = await aplicar(prisma, resultadosClausura);
+  const actualizadosClausura = await aplicarResultados(prisma, resultadosClausura);
 
   // ---------- Cuotas y pagos de los equipos 1 a 6 de Apertura 2026 ----------
   const equipos = await prisma.equipo.findMany({
@@ -150,30 +151,39 @@ async function plantillasDe(prisma: PrismaClient, temporadaId: number): Promise<
   return mapa;
 }
 
-/** Aplica los resultados. Devuelve cuántos partidos cambiaron (los que ya no están Programados se respetan). */
-async function aplicar(prisma: PrismaClient, resultados: ResultadoPartido[]): Promise<number> {
+/**
+ * Aplica los resultados. Devuelve cuántos partidos cambiaron.
+ * Cada partido va en UNA transacción: el cambio de estado y sus participantes/estadísticas se guardan juntos y
+ * solo si el partido seguía PROGRAMADO. Un partido que ya no lo está (finalizado o corregido desde la aplicación)
+ * se deja intacto, sin agregarle datos de prueba que aparecerían como oficiales.
+ */
+export async function aplicarResultados(prisma: PrismaClient, resultados: ResultadoPartido[]): Promise<number> {
   let cambiados = 0;
   for (const r of resultados) {
-    const res = await prisma.partido.updateMany({
-      where: { id: r.partidoId, estado: 'PROGRAMADO' },
-      data: {
-        estado: r.estado,
-        golesLocal: r.golesLocal,
-        golesVisitante: r.golesVisitante,
-        faltasLocal: r.faltasLocal,
-        faltasVisitante: r.faltasVisitante,
-        inicioReal: r.inicioReal,
-        finReal: r.finReal,
-      },
-    });
-    cambiados += res.count;
-    await prisma.participacionPartido.createMany({
-      data: r.participantes.map((p) => ({ partidoId: r.partidoId, jugadorId: p.jugadorId, equipoId: p.equipoId })),
-      skipDuplicates: true,
-    });
-    await prisma.estadisticaPartido.createMany({
-      data: r.estadisticas.map((e) => ({ partidoId: r.partidoId, ...e })),
-      skipDuplicates: true,
+    cambiados += await prisma.$transaction(async (tx) => {
+      const res = await tx.partido.updateMany({
+        where: { id: r.partidoId, estado: 'PROGRAMADO' },
+        data: {
+          estado: r.estado,
+          golesLocal: r.golesLocal,
+          golesVisitante: r.golesVisitante,
+          faltasLocal: r.faltasLocal,
+          faltasVisitante: r.faltasVisitante,
+          inicioReal: r.inicioReal,
+          finReal: r.finReal,
+        },
+      });
+      if (res.count === 0) return 0;
+      // participación antes que estadística: un trigger exige que el jugador haya participado.
+      await tx.participacionPartido.createMany({
+        data: r.participantes.map((p) => ({ partidoId: r.partidoId, jugadorId: p.jugadorId, equipoId: p.equipoId })),
+        skipDuplicates: true,
+      });
+      await tx.estadisticaPartido.createMany({
+        data: r.estadisticas.map((e) => ({ partidoId: r.partidoId, ...e })),
+        skipDuplicates: true,
+      });
+      return 1;
     });
   }
   return cambiados;

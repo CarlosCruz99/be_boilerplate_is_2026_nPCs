@@ -32,9 +32,11 @@ Se carga con `npm run db:seed` (después de DB-1.2 y DB-3.2). **No crea equipos 
 - Cuotas de arbitraje del equipo 1 y 5: ligadas al primer partido Finalizado de cada equipo.
 
 ## Idempotencia
-Dos corridas dejan los mismos registros: un partido solo se actualiza si sigue Programado (no pisa lo que haga el backend);
-participantes y estadísticas usan `skipDuplicates`; las cuotas se buscan antes de crearse; los pagos se insertan solo si su
-comprobante no existe (el trigger de tope corre antes del conflicto, por eso `skipDuplicates` no basta para pagos).
+Dos corridas dejan los mismos registros y las siguientes conservan lo que se haya hecho desde la aplicación:
+cada partido se actualiza **junto con** sus participantes y estadísticas en una sola transacción, y solo si sigue Programado
+(un partido ya finalizado o corregido no recibe datos de prueba); las cuotas se buscan antes de crearse; los pagos se insertan
+solo si su comprobante no existe (el trigger de tope corre antes del conflicto, por eso `skipDuplicates` no basta para pagos).
+Los seeds de H1 y del calendario tampoco pisan en la segunda corrida el estado de los equipos ni los horarios de los partidos.
 
 ## Efecto en los scripts de prueba
 Los scripts SQL que suponían la base vacía ahora se llevan a línea base vacía **dentro de su transacción** (se revierte con

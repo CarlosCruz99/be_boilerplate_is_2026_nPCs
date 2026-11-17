@@ -57,4 +57,4 @@ Sin cambios: `fn_saldo_cuota` ya trata los estados así. PENDIENTE reserva dispo
 
 ## Reversión
 
-`down.sql` quita el índice, la restricción, la llave foránea y las tres columnas. Se pierde quién y cuándo decidió y el motivo de rechazo; los estados se conservan.
+`down.sql` deja la base lista para volver a aplicar la migración. Antes de quitar las columnas, los pagos RECHAZADO se eliminan (no cuentan para el saldo y devolverlos a PENDIENTE podría superar el monto de la cuota) y los VERIFICADO vuelven a PENDIENTE; sin eso, la migración se negaría a aplicarse de nuevo porque exige que no existan pagos resueltos sin datos de decisión. Luego quita el índice, la restricción, la llave foránea y las tres columnas. Se pierde quién y cuándo decidió y el motivo de rechazo. Cambia datos: solo para desarrollo o con respaldo.
