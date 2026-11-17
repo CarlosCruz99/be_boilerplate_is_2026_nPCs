@@ -30,12 +30,15 @@ import { ParticipantesController } from './controllers/participantes.controller.
 import { ParticipantesService } from './services/participantes.service.js';
 import { AsignacionArbitroController } from './controllers/asignacion-arbitro.controller.js';
 import { AsignacionArbitroService } from './services/asignacion-arbitro.service.js';
+import { ListadoPartidosController } from './controllers/listado-partidos.controller.js';
+import { ListadoPartidosService } from './services/listado-partidos.service.js';
 import { EstadisticasPartidoController } from './controllers/estadisticas-partido.controller.js';
 import { EstadisticasPartidoService } from './services/estadisticas-partido.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    ListadoPartidosController,
     EstadisticasPartidoController,
     AsignacionArbitroController,
     ParticipantesController,
@@ -51,6 +54,7 @@ import { EstadisticasPartidoService } from './services/estadisticas-partido.serv
     ConsultaCalendarioController,
   ],
   providers: [
+    ListadoPartidosService,
     EstadisticasPartidoService,
     AsignacionArbitroService,
     ParticipantesService,

@@ -618,6 +618,31 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Lista pública de partidos (BE-6.1)
+
+`GET /api/v1/partidos` es público (`@Public()`) y no requiere sesión. Acepta
+`estado=PROGRAMADO|EN_CURSO|FINALIZADO`, `equipoId`, `page` (default 1) y
+`pageSize` (default 20, máximo 50). Devuelve `{ total, page, pageSize, partidos }`.
+Cada partido contiene id, número de jornada, inicio ISO, estado, local y visitante;
+cada equipo contiene id, nombre y goles. PROGRAMADO devuelve goles null.
+Los filtros se combinan y equipoId contempla local y visitante. Sin estado se
+incluyen los tres estados permitidos. Nunca devuelve CANCELADO.
+
+Solo el token válido de un ORGANIZADOR activo permite ver BORRADOR. El resto,
+incluidos acceso anónimo y token inválido, ve solo PUBLICADA, siguiendo el guard
+público existente. La ruta usa un controlador sin restricciones de rol heredadas
+del controlador H3. Responde con Cache-Control private, no-store y Vary Authorization.
+
+Orden: inicio DESC, id DESC. Total y filas comparten transacción RepeatableRead.
+Parámetros desconocidos, IDs inválidos, estado CANCELADO o paginación fuera de
+rango: 400. El desplazamiento máximo es 2147483647 para evitar errores del
+cliente Prisma. Equipo inexistente o página fuera del total devuelve 200 con
+lista vacía; no hay 404 por filtro. El mensaje visual de ausencia de resultados
+corresponde a FE-6.1. Esta tarea no crea el detalle de marcador BE-6.2.
+
+Reutiliza DB-6.1 y los índices existentes, sin nuevas migraciones. Swagger y
+pruebas cubren filtros, paginación, orden, visibilidad, goles y validación.
+
 ### Asignación del árbitro (BE-25.1)
 
 Solo ORGANIZADOR puede usar `GET /api/v1/partidos/:id/arbitros-disponibles`
