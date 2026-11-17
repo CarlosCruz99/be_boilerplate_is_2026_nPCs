@@ -32,12 +32,15 @@ import { AsignacionArbitroController } from './controllers/asignacion-arbitro.co
 import { AsignacionArbitroService } from './services/asignacion-arbitro.service.js';
 import { ListadoPartidosController } from './controllers/listado-partidos.controller.js';
 import { ListadoPartidosService } from './services/listado-partidos.service.js';
+import { DetalleMarcadorController } from './controllers/detalle-marcador.controller.js';
+import { DetalleMarcadorService } from './services/detalle-marcador.service.js';
 import { EstadisticasPartidoController } from './controllers/estadisticas-partido.controller.js';
 import { EstadisticasPartidoService } from './services/estadisticas-partido.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    DetalleMarcadorController,
     ListadoPartidosController,
     EstadisticasPartidoController,
     AsignacionArbitroController,
@@ -54,6 +57,7 @@ import { EstadisticasPartidoService } from './services/estadisticas-partido.serv
     ConsultaCalendarioController,
   ],
   providers: [
+    DetalleMarcadorService,
     ListadoPartidosService,
     EstadisticasPartidoService,
     AsignacionArbitroService,

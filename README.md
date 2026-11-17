@@ -618,6 +618,32 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Detalle público del marcador (BE-6.2)
+
+`GET /api/v1/partidos/:partidoId/marcador` es público y devuelve `partidoId`,
+estado, `local`, `visitante`, `goleadores` y `duracionMinutos`. Cada equipo
+contiene equipoId, nombre, goles, faltas y jugadores participantes (id, nombre).
+Marcador/faltas vienen de partido, participantes de participacion_partido y
+goleadores de estadistica_partido (goles > 0), con equipo de esa temporada.
+Los goleadores se ordenan por goles DESC, nombre e id; los participantes por id.
+Un goleador puede haber sido retirado de participantes: se conservan sus goles
+según la decisión H5/H9. No se reemplaza el marcador por la suma individual.
+Sin registros se devuelven arreglos vacíos. No expone datos privados de fichas.
+
+Solo un ORGANIZADOR activo con token válido ve BORRADOR; los demás reciben 404
+antes de comprobar el estado. Publicado PROGRAMADO: 409 «Este partido aún no
+comienza.»; CANCELADO: 409 «Este partido fue cancelado.»; inexistente: 404;
+identificador inválido: 400. Token inválido se trata como anónimo, igual que BE-6.1.
+
+**Duración acordada:** minutos completos, mínimo 0, sin límite de 90; EN_CURSO
+usa inicio_real y la hora de consulta; FINALIZADO usa inicio_real y fin_real.
+El helper admite reloj de referencia para probar límites sin depender del reloj.
+Todas las fuentes comparten snapshot RepeatableRead. Cache-Control private,
+no-store y Vary Authorization evitan compartir el resultado del organizador.
+El polling cada 10 segundos y el botón Actualizar corresponden a FE-6.2.
+La ruta pública GET no altera los permisos del PATCH de marcador de H5.
+Reutiliza DB-6.1 y BE-9.1, sin nuevas tablas ni migraciones.
+
 ### Lista pública de partidos (BE-6.1)
 
 `GET /api/v1/partidos` es público (`@Public()`) y no requiere sesión. Acepta
