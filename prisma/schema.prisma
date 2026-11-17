@@ -67,11 +67,14 @@ model User {
   partidosArbitro    Partido[]          @relation("ArbitroPartido")
   bitacorasMarcador  BitacoraMarcador[]
   cuotasCreadas Cuota[] @relation("CreadorCuota")
+
   pagosRegistrados Pago[]           @relation("RegistradorPago")
   cambiosPartido   CambioPartido[]  @relation("ModificadorCambio")
   entregasCorreo   EntregaCorreo[]  @relation("DestinatarioEntrega")
   contenidosSubidos    ContenidoGaleria[] @relation("SubidoPorGaleria")
   contenidosEliminados ContenidoGaleria[] @relation("EliminadoPorGaleria")
+  pagosVerificados    Pago[]              @relation("VerificadorPago")
+  correccionesPartido CorreccionPartido[] @relation("AutorCorreccion")
 
   @@map("usuario")
 }
@@ -253,10 +256,12 @@ model Partido {
   cuotas       Cuota[]
   cambios CambioPartido[]
   galeria ContenidoGaleria[]
+  correcciones CorreccionPartido[]
 
   @@index([equipoLocalId, inicio], map: "ix_partido_local_inicio")
   @@index([equipoVisitanteId, inicio], map: "ix_partido_visitante_inicio")
   @@index([temporadaId, jornadaId], map: "ix_partido_temporada_jornada")
+  @@index([estado, inicio(sort: Desc)], map: "ix_partido_estado_inicio")
   @@map("partido")
 }
 
@@ -378,6 +383,7 @@ model EstadisticaPartido {
   jugador Jugador @relation(fields: [jugadorId], references: [id])
 
   @@unique([partidoId, jugadorId])
+  @@index([jugadorId], map: "ix_estadistica_jugador")
   @@map("estadistica_partido")
 }
 
@@ -398,6 +404,8 @@ model Cuota {
   partido Partido? @relation(fields: [partidoId], references: [id], onDelete: Restrict)
   creador User     @relation("CreadorCuota", fields: [creadoPor], references: [id])
   pagos Pago[]
+
+  @@index([equipoId, temporadaId], map: "ix_cuota_equipo_temporada")
 
   @@map("cuota")
 }
@@ -439,9 +447,13 @@ model Pago {
   registradoPor     String     @map("registrado_por") @db.Uuid
   creadoEn          DateTime   @default(now()) @map("creado_en") @db.Timestamptz(3)
   claveIdempotencia String?    @map("clave_idempotencia") @db.VarChar(100)
+  verificadoPor  String?   @map("verificado_por") @db.Uuid
+  verificadoEn   DateTime? @map("verificado_en") @db.Timestamptz(3)
+  motivoRechazo  String?   @map("motivo_rechazo")
 
   cuota       Cuota @relation(fields: [cuotaId], references: [id])
   registrador User  @relation("RegistradorPago", fields: [registradoPor], references: [id])
+  verificador User? @relation("VerificadorPago", fields: [verificadoPor], references: [id], onDelete: Restrict)
 
   @@unique([registradoPor, claveIdempotencia], map: "pago_registrado_por_clave_idempotencia_key")
   @@index([cuotaId, estado], map: "ix_pago_cuota_estado")
@@ -517,6 +529,22 @@ model ContenidoGaleria {
 
   @@index([partidoId, creadoEn(sort: Desc), id(sort: Desc)], map: "ix_galeria_partido_fecha")
   @@map("contenido_galeria")
+}
+
+model CorreccionPartido {
+  id        Int      @id @default(autoincrement())
+  partidoId Int      @map("partido_id")
+  usuarioId String   @map("usuario_id") @db.Uuid
+  motivo    String
+  antes     Json
+  despues   Json
+  fecha     DateTime @default(now()) @db.Timestamptz(3)
+
+  partido Partido @relation(fields: [partidoId], references: [id])
+  usuario User    @relation("AutorCorreccion", fields: [usuarioId], references: [id])
+
+  @@index([partidoId, fecha(sort: Desc)], map: "ix_correccion_partido")
+  @@map("correccion_partido")
 }
 
 // =============================================================================

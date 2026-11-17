@@ -25,16 +25,26 @@ CREATE FUNCTION pg_temp.filas(sentencia text) RETURNS bigint AS $$
 DECLARE n bigint;
 BEGIN EXECUTE sentencia; GET DIAGNOSTICS n = ROW_COUNT; RETURN n; END $$ LANGUAGE plpgsql;
 
+-- Desde DB-24.1 un pago VERIFICADO/RECHAZADO exige quien decidio, cuando y (si se rechaza) el motivo.
 CREATE FUNCTION pg_temp.ins(cuota int, monto numeric, estado text, clave_arch text, usuario uuid, idem text DEFAULT NULL,
                             mime text DEFAULT 'image/png', bytes int DEFAULT 1000) RETURNS text AS $$
-  SELECT format($q$INSERT INTO pago(cuota_id,monto,fecha_pago,comprobante_clave,comprobante_mime,comprobante_bytes,estado,registrado_por,clave_idempotencia)
-                   VALUES (%s,%s,'2026-11-10',%L,%L,%s,%L,%L,%L)$q$, cuota, monto, clave_arch, mime, bytes, estado, usuario, idem)
+  SELECT format($q$INSERT INTO pago(cuota_id,monto,fecha_pago,comprobante_clave,comprobante_mime,comprobante_bytes,estado,registrado_por,clave_idempotencia,verificado_por,verificado_en,motivo_rechazo)
+                   VALUES (%s,%s,'2026-11-10',%L,%L,%s,%L,%L,%L,%s,%s,%s)$q$, cuota, monto, clave_arch, mime, bytes, estado, usuario, idem,
+         CASE WHEN estado = 'PENDIENTE' THEN 'NULL' ELSE quote_literal((SELECT id FROM usuario WHERE rol='ORGANIZADOR' ORDER BY email LIMIT 1)) END,
+         CASE WHEN estado = 'PENDIENTE' THEN 'NULL' ELSE 'now()' END,
+         CASE WHEN estado = 'RECHAZADO' THEN quote_literal('Comprobante ilegible o incompleto') ELSE 'NULL' END)
 $$ LANGUAGE sql;
 
 SELECT pg_temp.esperar('tabla pago creada', (SELECT count(*) FROM information_schema.tables WHERE table_name='pago'), 1);
 SELECT pg_temp.esperar('funcion fn_saldo_cuota creada', (SELECT count(*) FROM pg_proc WHERE proname='fn_saldo_cuota'), 1);
 
+SELECT (SELECT count(*) FROM pago) + (SELECT count(*) FROM cuota) AS base0 \gset
 BEGIN;
+-- Linea base vacia DENTRO de esta transaccion: el seed consolidado (DB-1.4) deja pagos, cuotas, estadisticas y partidos
+-- Finalizados que estas pruebas no esperan. Todo se restaura con el ROLLBACK final.
+DELETE FROM pago; DELETE FROM cuota; DELETE FROM estadistica_partido; DELETE FROM participacion_partido;
+UPDATE partido SET estado='PROGRAMADO', goles_local=0, goles_visitante=0, faltas_local=0, faltas_visitante=0, inicio_real=NULL, fin_real=NULL WHERE estado<>'PROGRAMADO';
+DELETE FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025'); DELETE FROM jornada WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Clausura 2025');
 SELECT t.id AS t1 FROM temporada t WHERE t.nombre='Apertura 2026' \gset
 SELECT id AS e1 FROM equipo WHERE temporada_id=:t1 ORDER BY id LIMIT 1 \gset
 SELECT id AS org FROM usuario WHERE rol='ORGANIZADOR' ORDER BY email LIMIT 1 \gset
@@ -72,13 +82,13 @@ SELECT pg_temp.esperar('disponible = 0', (SELECT disponible FROM fn_saldo_cuota(
 SELECT pg_temp.debe_fallar('un centavo mas', pg_temp.ins(:c1, 0.01, 'PENDIENTE', 'k7', :'cap'), '23514');
 
 -- Transiciones (H24): rechazar libera lo reservado; verificar lo pasa de reserva a saldo
-UPDATE pago SET estado='RECHAZADO' WHERE comprobante_clave='k6';
+UPDATE pago SET estado='RECHAZADO', verificado_por=:'org', verificado_en=now(), motivo_rechazo='Comprobante ilegible o incompleto' WHERE comprobante_clave='k6';
 SELECT pg_temp.esperar('al rechazar un pendiente se libera su disponible (50)', (SELECT disponible FROM fn_saldo_cuota(:c1))::bigint, 50);
-UPDATE pago SET estado='VERIFICADO' WHERE comprobante_clave='k1';
+UPDATE pago SET estado='VERIFICADO', verificado_por=:'org', verificado_en=now() WHERE comprobante_clave='k1';
 SELECT pg_temp.esperar('al verificar: saldo = 50', (SELECT saldo FROM fn_saldo_cuota(:c1))::bigint, 50);
 SELECT pg_temp.esperar('al verificar: el disponible no cambia (50)', (SELECT disponible FROM fn_saldo_cuota(:c1))::bigint, 50);
 SELECT pg_temp.esperar('al verificar: pendiente_verificacion = 0', (SELECT pendiente_verificacion FROM fn_saldo_cuota(:c1))::bigint, 0);
-SELECT pg_temp.debe_fallar('reabrir un rechazado sin disponible suficiente', 'UPDATE pago SET estado=''PENDIENTE'', monto=60 WHERE comprobante_clave=''k3''', '23514');
+SELECT pg_temp.debe_fallar('reabrir un rechazado sin disponible suficiente', 'UPDATE pago SET estado=''PENDIENTE'', monto=60, verificado_por=NULL, verificado_en=NULL, motivo_rechazo=NULL WHERE comprobante_clave=''k3''', '23514');
 
 -- Otra cuota no se mezcla
 SELECT pg_temp.esperar('la otra cuota no se afecta (80)', (SELECT disponible FROM fn_saldo_cuota(:c2))::bigint, 80);
@@ -101,5 +111,5 @@ SELECT pg_temp.esperar('varios pagos sin clave de idempotencia', pg_temp.filas(p
 SELECT pg_temp.debe_fallar('no se puede borrar una cuota con pagos', format('DELETE FROM cuota WHERE id=%s', :c1), '23503');
 ROLLBACK;
 
-SELECT pg_temp.esperar('despues del ROLLBACK no quedan pagos ni cuotas', (SELECT count(*) FROM pago) + (SELECT count(*) FROM cuota), 0);
+SELECT pg_temp.esperar('despues del ROLLBACK quedan los mismos pagos y cuotas (los del seed)', (SELECT count(*) FROM pago) + (SELECT count(*) FROM cuota), :base0);
 \echo 'Tabla pago y saldos (DB-13.1) verificados.'

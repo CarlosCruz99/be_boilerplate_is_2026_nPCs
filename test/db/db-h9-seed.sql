@@ -1,4 +1,5 @@
--- Verifica el dato de prueba de DB-9.1 (cargado por npm run db:seed): partido 12, goles 1, asistencias 0, tarjetas 1.
+-- Verifica el dato de prueba de DB-9.1 (cargado por npm run db:seed): partido 12, primer jugador local con goles 1, asistencias 0, tarjetas 1.
+-- Vale antes y despues de DB-1.4 (que agrega las estadisticas del resto de los jugadores del partido).
 -- Uso: docker exec -i si_be_postgres psql -U postgres -d si_be_boilerplate -v ON_ERROR_STOP=1 < test/db/db-h9-seed.sql
 CREATE FUNCTION pg_temp.esperar(caso text, obtenido bigint, esperado bigint) RETURNS void AS $$
 BEGIN
@@ -26,8 +27,9 @@ BEGIN EXECUTE sentencia; GET DIAGNOSTICS n = ROW_COUNT; RETURN n; END $$ LANGUAG
 
 SELECT p.id AS p12, p.equipo_local_id AS loc, p.temporada_id AS t FROM partido p JOIN temporada t ON t.id=p.temporada_id
  WHERE t.nombre='Apertura 2026' ORDER BY p.id OFFSET 11 LIMIT 1 \gset
-SELECT pg_temp.esperar('hay un registro de prueba en el partido 12', (SELECT count(*) FROM estadistica_partido WHERE partido_id=:p12), 1);
-SELECT pg_temp.esperar('goles = 1, asistencias = 0, tarjetas = 1', (SELECT count(*) FROM estadistica_partido WHERE partido_id=:p12 AND goles=1 AND asistencias=0 AND tarjetas=1), 1);
+SELECT jugador_id AS jprim FROM equipo_jugador WHERE temporada_id=:t AND equipo_id=:loc ORDER BY jugador_id LIMIT 1 \gset
+SELECT pg_temp.esperar('hay un registro de prueba del primer jugador local en el partido 12', (SELECT count(*) FROM estadistica_partido WHERE partido_id=:p12 AND jugador_id=:jprim), 1);
+SELECT pg_temp.esperar('goles = 1, asistencias = 0, tarjetas = 1', (SELECT count(*) FROM estadistica_partido WHERE partido_id=:p12 AND jugador_id=:jprim AND goles=1 AND asistencias=0 AND tarjetas=1), 1);
 SELECT pg_temp.esperar('el jugador esta inscrito en el equipo local del partido', (SELECT count(*) FROM estadistica_partido e
-  JOIN equipo_jugador ej ON ej.jugador_id=e.jugador_id AND ej.equipo_id=:loc AND ej.temporada_id=:t WHERE e.partido_id=:p12), 1);
+  JOIN equipo_jugador ej ON ej.jugador_id=e.jugador_id AND ej.equipo_id=:loc AND ej.temporada_id=:t WHERE e.partido_id=:p12 AND e.jugador_id=:jprim), 1);
 \echo 'Seed de estadisticas verificado.'

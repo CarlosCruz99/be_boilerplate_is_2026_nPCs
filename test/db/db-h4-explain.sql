@@ -11,7 +11,7 @@ END $$ LANGUAGE plpgsql;
 
 SELECT pg_temp.esperar('indices de DB-4.1 creados', (SELECT count(*) FROM pg_indexes
   WHERE tablename='partido' AND indexname IN ('ix_partido_local_inicio','ix_partido_visitante_inicio','ix_partido_temporada_jornada')), 3);
-SELECT pg_temp.esperar('partidos en la tabla', (SELECT count(*) FROM partido), 66);
+SELECT pg_temp.esperar('partidos de Apertura en la tabla', (SELECT count(*) FROM partido WHERE temporada_id=(SELECT id FROM temporada WHERE nombre='Apertura 2026')), 66);
 
 -- Equipo de prueba: el primer inscrito de Apertura 2026.
 SELECT e.id AS equipo FROM equipo e JOIN temporada t ON t.id=e.temporada_id

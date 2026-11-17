@@ -73,7 +73,7 @@ export async function seedH1(prisma: PrismaClient, passwordHash: string): Promis
       };
       const equipo = await prisma.equipo.upsert({
         where: { temporadaId_capitanId: { temporadaId: temporada.id, capitanId } },
-        update: datosEquipo,
+        update: {}, // las decisiones de inscripción se hacen en la app: el seed solo las inicializa al crear
         create: { temporadaId: temporada.id, capitanId, ...datosEquipo },
       });
 

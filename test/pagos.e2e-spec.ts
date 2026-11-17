@@ -217,8 +217,8 @@ describe('BE-13.1: pagos y comprobantes privados', () => {
     expect(
       (
         await db.query(
-          "SELECT id FROM aviso WHERE referencia_tipo='PAGO' AND referencia_id=$1",
-          [pago.id],
+          "SELECT id FROM aviso WHERE referencia_tipo='PAGO' AND referencia_id=$1 AND clave_idempotencia=$2",
+          [pago.id, `pago-${pago.id}`],
         )
       ).rowCount,
     ).toBe(1);
@@ -254,17 +254,19 @@ describe('BE-13.1: pagos y comprobantes privados', () => {
   });
   it('verificados bajan saldo, rechazados liberan disponible', async () => {
     const p = await enviar().expect(201);
-    await db.query("UPDATE pago SET estado='VERIFICADO' WHERE id=$1", [
-      p.body.id,
-    ]);
+    await db.query(
+      "UPDATE pago SET estado='VERIFICADO', verificado_por=$2, verificado_en=now() WHERE id=$1",
+      [p.body.id, organizadorId],
+    );
     expect((await listar().expect(200)).body.cuotas[0]).toMatchObject({
       totalVerificado: '60.00',
       saldo: '40.00',
       disponible: '40.00',
     });
-    await db.query("UPDATE pago SET estado='RECHAZADO' WHERE id=$1", [
-      p.body.id,
-    ]);
+    await db.query(
+      "UPDATE pago SET estado='RECHAZADO', verificado_por=$2, verificado_en=now(), motivo_rechazo=$3 WHERE id=$1",
+      [p.body.id, organizadorId, 'El comprobante no es legible'],
+    );
     expect((await listar().expect(200)).body.cuotas[0]).toMatchObject({
       saldo: '100.00',
       disponible: '100.00',
