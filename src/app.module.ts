@@ -11,6 +11,7 @@ import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
 import { CuotasModule } from './cuotas/cuotas.module.js';
 import { PagosModule } from './pagos/pagos.module.js';
 import { GaleriaModule } from './galeria/galeria.module.js';
+import { EstadisticasModule } from './estadisticas/estadisticas.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { GaleriaModule } from './galeria/galeria.module.js';
     CuotasModule,
     PagosModule,
     GaleriaModule,
+    EstadisticasModule,
   ],
   providers: [
     {
