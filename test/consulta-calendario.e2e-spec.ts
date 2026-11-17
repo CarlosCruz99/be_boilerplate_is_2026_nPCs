@@ -121,13 +121,19 @@ describe('BE-4.1 calendario del equipo', () => {
     const otro = await listar(equipoId, jugador).expect(200);
     expect(otro.body).toEqual(lista);
 
-    for (const partido of lista.partidos) {
+    const estadosPorJornada = [
+      'FINALIZADO',
+      'FINALIZADO',
+      'FINALIZADO',
+      'EN_CURSO',
+    ];
+    for (const [indice, partido] of lista.partidos.entries()) {
       expect(partido).toEqual({
         id: expect.any(Number),
         jornada: expect.any(Number),
         inicio: expect.stringMatching(/Z$/),
         fin: expect.stringMatching(/Z$/),
-        estado: 'PROGRAMADO',
+        estado: estadosPorJornada[indice],
         cancha: {
           id: expect.any(Number),
           nombre: expect.any(String),
@@ -237,9 +243,10 @@ describe('BE-4.1 calendario del equipo', () => {
   });
 
   it('refleja una reprogramación al recargar y retira los cancelados del listado', async () => {
-    const lista = (await listar(equipoId, capitan).expect(200))
+    const lista = (await listar(equipoId, organizador).expect(200))
       .body as CalendarioDelEquipoDto;
-    const original = lista.partidos[0];
+    const original = lista.partidos.find((p) => p.jornada === 5)!;
+    expect(original.estado).toBe('PROGRAMADO');
     const canchas = await db.query<{
       id: number;
       nombre: string;
@@ -279,7 +286,18 @@ describe('BE-4.1 calendario del equipo', () => {
       'SELECT COALESCE(max(id), 0) AS ultimo FROM cambio_partido WHERE partido_id = $1',
       [original.id],
     );
+    const {
+      rows: [jornada],
+    } = await db.query<{ id: number }>(
+      `UPDATE jornada SET estado='PUBLICADA', publicada_en=now(),
+         publicada_por=(SELECT id FROM usuario WHERE email='organizador@liga.test')
+       WHERE id=(SELECT jornada_id FROM partido WHERE id=$1) AND estado='BORRADOR'
+       RETURNING id`,
+      [original.id],
+    );
+    expect(jornada).toBeDefined();
     try {
+      await detalle(original.id, capitan).expect(200);
       await client()
         .patch(url)
         .auth(organizador, bearer)
@@ -308,7 +326,7 @@ describe('BE-4.1 calendario del equipo', () => {
         .send({ estado: 'CANCELADO' })
         .expect(200);
       for (const [token, total] of [
-        [capitan, 3],
+        [capitan, 4],
         [organizador, 10],
       ] as const) {
         const sinCancelado = (await listar(equipoId, token).expect(200))
@@ -349,6 +367,10 @@ describe('BE-4.1 calendario del equipo', () => {
           original.fin,
           original.estado,
         ],
+      );
+      await db.query(
+        "UPDATE jornada SET estado='BORRADOR', publicada_en=NULL, publicada_por=NULL WHERE id=$1",
+        [jornada.id],
       );
     }
   });
