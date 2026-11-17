@@ -57,4 +57,6 @@ Sin cambios: `fn_saldo_cuota` ya trata los estados así. PENDIENTE reserva dispo
 
 ## Reversión
 
-`down.sql` deja la base lista para volver a aplicar la migración. Antes de quitar las columnas, los pagos RECHAZADO se eliminan (no cuentan para el saldo y devolverlos a PENDIENTE podría superar el monto de la cuota) y los VERIFICADO vuelven a PENDIENTE; sin eso, la migración se negaría a aplicarse de nuevo porque exige que no existan pagos resueltos sin datos de decisión. Luego quita el índice, la restricción, la llave foránea y las tres columnas. Se pierde quién y cuándo decidió y el motivo de rechazo. Cambia datos: solo para desarrollo o con respaldo.
+`down.sql` solo se puede ejecutar con éxito si todos los pagos están `PENDIENTE`. En una sola transacción, bloquea `pago` en modo `ACCESS EXCLUSIVE` antes de consultar los estados. Si encuentra un pago `VERIFICADO` o `RECHAZADO`, aborta con un error y conserva el esquema, los registros, las decisiones y los saldos.
+
+Si todos los pagos están `PENDIENTE`, la transacción quita el índice parcial, la restricción `ck_pago_decision`, la llave foránea y las tres columnas de decisión. Los pagos y sus saldos se conservan y la migración se puede volver a aplicar.
