@@ -12,6 +12,7 @@ import { CuotasModule } from './cuotas/cuotas.module.js';
 import { PagosModule } from './pagos/pagos.module.js';
 import { GaleriaModule } from './galeria/galeria.module.js';
 import { EstadisticasModule } from './estadisticas/estadisticas.module.js';
+import { ReportesModule } from './reportes/reportes.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { EstadisticasModule } from './estadisticas/estadisticas.module.js';
     PagosModule,
     GaleriaModule,
     EstadisticasModule,
+    ReportesModule,
   ],
   providers: [
     {
