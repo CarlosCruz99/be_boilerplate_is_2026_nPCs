@@ -618,6 +618,30 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Próximos rivales del capitán (BE-7.2)
+
+`GET /api/v1/equipos/:equipoId/proximos-partidos` exige sesión activa con rol
+JUGADOR y que `equipo.capitan_id` coincida con el usuario. Un jugador del equipo
+que no es capitán, otro capitán, un árbitro o un organizador recibe 403. No se
+publica esta información en el GET público de posiciones de BE-7.1.
+
+Devuelve `{ equipoId, proximos: [{ partidoId, fechaHora, rival: { equipoId,
+nombre, lugar, puntos } }] }`. Selecciona partidos PROGRAMADO de jornadas
+PUBLICADA en la temporada actual, tanto de local como visitante, ordenados por
+inicio ASC e id ASC. Las fechas se serializan como ISO UTC. Lugar y puntos se
+leen de v_tabla_posiciones, sin recalcular ni reducir el ranking a los rivales.
+
+**Decisiones acordadas:** se excluyen programados con inicio anterior a la hora
+de consulta; un rival sin fila se incluye con lugar y puntos null; un equipo no
+INSCRITO o de otra temporada devuelve 403; sin temporada actual se responde 404.
+Equipo inexistente: 404; identificador inválido: 400; sin sesión: 401. Si no hay
+partidos elegibles, responde 200 con próximos vacíos. La capitanía se comprueba
+antes de consultar y devolver datos de partidos. Autorización, temporada y
+consulta comparten snapshot RepeatableRead, con una sola referencia de tiempo.
+Cache-Control private, no-store y Vary Authorization evitan caché compartida.
+Swagger y pruebas cubren autorización por rol/capitanía, filtros, clasificación,
+ausencia de posición, ausencia de partidos, temporada y consultas sin escritura.
+
 ### Tabla pública de posiciones (BE-7.1)
 
 `GET /api/v1/posiciones` devuelve `{ temporadaId, posiciones }` para la temporada
