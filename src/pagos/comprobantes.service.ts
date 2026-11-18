@@ -7,7 +7,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { mkdir, open, readFile, rm } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -63,6 +63,15 @@ export class ComprobantesService {
     this.validarClave(clave);
     return readFile(join(this.directorio, clave));
   }
+  async existe(clave: string): Promise<boolean> {
+    this.validarClave(clave);
+    try {
+      return (await stat(join(this.directorio, clave))).isFile();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw error;
+    }
+  }
   async eliminar(clave: string): Promise<void> {
     this.validarClave(clave);
     try {
@@ -73,7 +82,14 @@ export class ComprobantesService {
     }
   }
   private validarClave(clave: string): void {
-    if (!/^[0-9a-f-]{36}$/.test(clave))
+    // UUID generados por H13 y claves relativas existentes del seed. Nunca
+    // rutas absolutas, segmentos . / .., barras Windows ni entrada del cliente.
+    if (
+      clave.length > 255 ||
+      !/^(?:[A-Za-z0-9][A-Za-z0-9_-]*\/)*[A-Za-z0-9][A-Za-z0-9._-]*$/.test(
+        clave,
+      )
+    )
       throw new Error('Clave de comprobante inválida.');
   }
 }

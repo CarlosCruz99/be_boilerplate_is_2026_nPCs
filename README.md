@@ -618,6 +618,33 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Historial privado y comprobantes (BE-14.1)
+
+`GET /api/v1/equipos/:equipoId/pagos?temporadaId=...&concepto=INSCRIPCION|ARBITRAJE`
+requiere temporada; concepto es opcional (null en la respuesta si no se filtra).
+Solo JUGADOR cuyo id coincide con equipo.capitan_id accede. Permite temporadas
+históricas y no exige equipo INSCRITO. Equipo de otra temporada: 422; recurso
+inexistente: 404; sin sesión: 401; rol/capitanía incorrectos: 403; ID, filtro o
+cuerpo no vacío: 400. No se toman identidad ni rol del cuerpo.
+
+Respuesta: equipoId, temporadaId, concepto, pagos y totales. Cada pago contiene
+id, concepto, monto, fechaPago, estado, motivoRechazo y tieneComprobante. Orden
+fechaPago DESC, id DESC, sin paginación. Incluye PENDIENTE, VERIFICADO y RECHAZADO.
+Total registrado suma todos; los otros tres totales separan estados. Se calculan
+con BigInt en céntimos desde la misma lista completa leída en RepeatableRead,
+sin punto flotante ni consultas separadas incoherentes. Vacío válido devuelve
+pagos=[] y cuatro 0.00. Error de base o almacenamiento devuelve error, nunca ceros.
+
+**Decisión acordada:** tieneComprobante comprueba que el archivo privado realmente
+existe. Solo ENOENT indica ausencia; errores de permisos/lectura se propagan.
+La disponibilidad es la observada al consultar y puede cambiar después.
+`GET /api/v1/pagos/:pagoId/comprobante` revalida rol y capitanía actual y descarga
+los bytes con MIME persistido, nombre adjunto pago-{id}, Cache-Control private,
+no-store y X-Content-Type-Options nosniff. Archivo ausente: 404. Clave interna
+y URL pública permanente nunca se devuelven. Reutiliza H13 sin copiar archivos
+ni modificar pagos; H24 verifica/rechaza. Pruebas de permisos cruzados, filtros,
+precisión, ausencia de archivos, descarga, fallos de almacenamiento y solo lectura.
+
 ### Próximos rivales del capitán (BE-7.2)
 
 `GET /api/v1/equipos/:equipoId/proximos-partidos` exige sesión activa con rol
