@@ -618,6 +618,33 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 
 ## Scripts disponibles
 
+### Tabla pública de posiciones (BE-7.1)
+
+`GET /api/v1/posiciones` devuelve `{ temporadaId, posiciones }` para la temporada
+actual. Cada fila contiene lugar, equipoId, equipo, pj, pg, pe, pp, gf, gc, dg y
+puntos. `GET /api/v1/posiciones/equipos/:equipoId` devuelve esa misma fila, con
+su lugar en la tabla completa. Ambos son públicos, sin parámetros obligatorios
+en la consulta y sin caché. Una sesión inválida se trata como acceso anónimo.
+
+Solo se consulta `v_tabla_posiciones`, que ordena por puntos DESC, DG DESC,
+GF DESC, nombre ASC e id ASC. No se recalcula ni escribe al consultar; la fuente
+es la tabla oficial mantenida por H8/H5/H23. La lista comparte snapshot
+RepeatableRead con la selección de temporada. El detalle filtra la vista después
+de asignar el lugar, para no devolver siempre lugar 1.
+
+**Decisión acordada:** sin temporada actual, GET de la tabla responde 404
+«No hay temporada actual.». Si existe pero no tiene filas, responde 200 con
+posiciones vacías. Equipo inexistente, de otra temporada o sin fila en posicion:
+404. Identificador inválido: 400. No se añaden equipos sin fila ni se crean
+posiciones en cero desde el GET; esa responsabilidad corresponde al recálculo.
+
+POST, PUT, PATCH y DELETE sobre ambas rutas responden 405 incluso sin sesión,
+con Allow GET, HEAD. HEAD conserva el comportamiento de lectura de Express.
+No hay endpoints de edición. El polling de 30 segundos y el resaltado de equipo
+son responsabilidad de FE-7.1; los próximos rivales pertenecen a BE-7.2.
+Swagger documenta las consultas y las pruebas verifican mapeo, ranking, filtros,
+lectura sin sesión y rechazo de escrituras sin alterar registros.
+
 ### Detalle público del marcador (BE-6.2)
 
 `GET /api/v1/partidos/:partidoId/marcador` es público y devuelve `partidoId`,
