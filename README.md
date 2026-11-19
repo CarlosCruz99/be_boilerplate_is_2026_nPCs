@@ -1041,3 +1041,52 @@ Errores: 400 filtros inválidos o temporada ausente; 401 sin sesión válida;
 403 cualquier rol distinto de organizador; 404 temporada inexistente;
 500 error real de consulta. El endpoint es de solo lectura y está documentado
 en Swagger. No modifica pagos, cuotas, equipos ni la vista y no implementa H24.
+
+# H24 · Revisión y decisión de pagos (BE-24.1, NPCS-40)
+
+Las cuatro rutas requieren sesión activa con rol `ORGANIZADOR`:
+
+- `GET /api/v1/pagos/pendientes?page=1&pageSize=20`: devuelve
+  `{ total, page, pageSize, pagos: [{ id, cuotaId, equipo: { id, nombre }, concepto, monto, fechaPago }] }`.
+  Todas las temporadas; más antiguos primero (`creadoEn ASC, id ASC`),
+  tamaño máximo 50. Página y total se leen en la misma instantánea.
+- `GET /api/v1/pagos/{id}/revision`: devuelve `id`, `estado`, `monto`,
+  `fechaPago`, `cuota: { id, temporadaId, equipo: { id, nombre }, concepto,
+  montoTotal, saldo, disponible }`, `tieneComprobante`, `verificadoPor`,
+  `verificadoEn`, `motivoRechazo`. El archivo se comprueba realmente;
+  no se devuelven claves de almacenamiento ni URLs públicas.
+- `GET /api/v1/pagos/{id}/revision/comprobante`: transmite el archivo privado
+  adjunto, con MIME persistido, `nosniff` y nombre `pago-{id}`. El detalle y la
+  descarga siguen disponibles tras resolver el pago (decisión acordada).
+- `PATCH /api/v1/pagos/{id}/verificacion`: recibe
+  `{ "estado": "VERIFICADO" }` o
+  `{ "estado": "RECHAZADO", "motivo": "El comprobante no corresponde a esta cuota." }`.
+  Responde `{ id, estado, verificadoPor, verificadoEn, saldo, disponible }`.
+  Identidad y fecha se obtienen del servidor. El motivo del rechazo exige
+  20–500 caracteres después de recortar espacios; al verificar se guarda NULL.
+
+La decisión usa `ReadCommitted`, bloquea **cuota antes de pago**, relee el
+estado y actualiza únicamente si sigue `PENDIENTE`. Comparte el bloqueo de
+cuota con H13 y su trigger; evita dobles decisiones y carreras al registrar
+otros pagos. Estado, responsable, fecha y motivo se guardan en un único UPDATE;
+saldo y disponible se consultan dentro de la misma transacción. Cualquier fallo
+revierte la decisión. No se duplican pagos ni se modifican sus montos o cuotas.
+
+**Decisión acordada:** verificar exige que exista el comprobante privado;
+si falta se responde 422 y se conserva PENDIENTE. Rechazar sigue permitido
+sin archivo y libera el monto reservado. Verificar reduce saldo; los pagos
+pendientes y rechazados no cuentan como pagado. H14 muestra el motivo de
+rechazo y H21 refleja los importes en la siguiente consulta, sin caché.
+No se agregan avisos de decisión, ya que H24 no los especifica.
+
+Errores: 400 datos/ID/paginación; 401 sin sesión; 403 rol distinto de
+ORGANIZADOR; 404 pago/archivo inexistente; 409 `El pago ya fue resuelto.`;
+422 archivo ausente al verificar; 500 fallo real de consulta o almacenamiento.
+Las rutas privadas usan `Cache-Control: private, no-store` y `Vary: Authorization`.
+La ruta del capitán de H14 conserva sus propios permisos; el organizador usa
+la ruta `/revision/comprobante`.
+
+Swagger documenta las cuatro rutas. Las pruebas de H24 cubren validaciones,
+permisos, descarga, ambos resultados, concurrencia entre organizadores,
+registros simultáneos de H13, integración con H14/H21 y rollback al COMMIT.
+No se requieren migraciones nuevas: se utiliza DB-24.1 existente.
