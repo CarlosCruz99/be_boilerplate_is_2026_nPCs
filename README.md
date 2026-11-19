@@ -1008,3 +1008,36 @@ entre la petición y la escritura. Mantener el orden de bloqueos del proyecto:
 temporada antes de partido cuando se necesiten ambas filas. La validación del
 estado y el 409 de un partido finalizado pertenecen al servicio de cada acción;
 ser árbitro asignado no autoriza transiciones de estado ni correcciones H23.
+
+# H21 · Reporte de estado de pagos (BE-21.1, NPCS-148)
+
+`GET /api/v1/reportes/pagos?temporadaId=1&concepto=TODOS&estado=MOROSO`
+requiere una sesión activa con rol `ORGANIZADOR`. `temporadaId` es obligatorio;
+`concepto` admite `TODOS` (predeterminado), `INSCRIPCION` y `ARBITRAJE`;
+`estado` es opcional y admite `MOROSO`, `CON_SALDO`, `PAGADO`, `SIN_CUOTAS`.
+
+La respuesta contiene `temporadaId`, `concepto`, `generadoEn` (ISO UTC),
+`equipos: [{ equipoId, nombre, totalCuotas, pagado, saldoPendiente, estado, vencidoDesde }]`
+y `totales: { totalCuotas, pagado, saldoPendiente, equiposMorosos }`.
+Los montos son cadenas USD de dos decimales, sumadas con céntimos exactos.
+No hay paginación. Orden: morosos, con saldo, pagados, sin cuotas; por nombre
+en español dentro del grupo, con ID como desempate.
+
+Se consulta `v_estado_pagos_equipo` de DB-21.1 en cada solicitud, sin caché.
+Solo se incluyen equipos `INSCRITO` de la temporada indicada; `pagado`
+cuenta exclusivamente pagos `VERIFICADO`. El concepto seleccionado determina
+los montos y el estado. **Decisión acordada:** un equipo sin cuotas de ese
+concepto sigue apareciendo con ceros y `SIN_CUOTAS`.
+
+La prioridad del estado es: total de cuotas 0 → `SIN_CUOTAS`;
+vencimiento con saldo → `MOROSO`; saldo positivo → `CON_SALDO`;
+en otro caso → `PAGADO`. `vencidoDesde` es la fecha más antigua con saldo
+vencido, calculada por la vista en `America/El_Salvador`; vencer hoy no es mora.
+Los totales se calculan después de los filtros sobre el mismo conjunto de
+filas, leído en una transacción `RepeatableRead`. Una temporada vacía válida
+devuelve `equipos: []` y totales 0.00; los errores no se sustituyen por ceros.
+
+Errores: 400 filtros inválidos o temporada ausente; 401 sin sesión válida;
+403 cualquier rol distinto de organizador; 404 temporada inexistente;
+500 error real de consulta. El endpoint es de solo lectura y está documentado
+en Swagger. No modifica pagos, cuotas, equipos ni la vista y no implementa H24.
