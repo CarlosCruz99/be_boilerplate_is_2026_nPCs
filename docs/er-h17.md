@@ -19,6 +19,18 @@ Migración: `20261111160000_db_17_1_contenido_galeria`
 - La respuesta 200 incluye `partidoId`, `totalActivos`, `limite` y `resultados` en el orden enviado. Cada resultado incluye `nombre` y `estado`, con `contenidoId` si quedó `PUBLICADO` o `motivo` si quedó en `ERROR`.
 - Una subida con el mismo partido, organizador, nombre, descripción y bytes devuelve el identificador de la publicación activa anterior. Se puede enviar un archivo por solicitud para mostrar su avance y controlar su reintento de manera individual.
 
+## Consulta y archivos privados (BE-18.1)
+
+`GET /api/v1/partidos/{partidoId}/galeria?page=1&pageSize=6` devuelve `items`, `page`, `pageSize`, `totalElementos` y `totalPaginas`. `page` empieza en 1 y `pageSize` es fijo en 6. Ambos parámetros son opcionales. Los elementos activos se ordenan por `creadoEn` e `id` descendentes. Una galería vacía devuelve `200` con `items: []` y totales en cero. Una página posterior a la última conserva los totales de la galería y devuelve `items: []`.
+
+Cada elemento incluye `id`, `tipo`, `descripcion`, `creadoEn`, `mimeType` y `url`. `url` identifica la ruta `/api/v1/partidos/{partidoId}/galeria/{contenidoId}/archivo`. Incluir `Authorization: Bearer <JWT>` tanto en el listado como al abrir el archivo. El archivo se transmite en línea y admite `Range` para reproducción de MP4. Las dos respuestas usan `Cache-Control: private, no-store`.
+
+El organizador y los jugadores o capitanes de los equipos del partido pueden consultar. Cada petición de archivo comprueba de nuevo el partido, la pertenencia del usuario y que el elemento esté activo. `400` indica parámetros inválidos, `401` una sesión inválida, `403` falta de acceso y `404` un partido, elemento o archivo inexistente. Los elementos del seed sin archivo físico aparecen en el listado con sus metadatos y devuelven `404` al abrirlos. Un fallo de la base produce un error de consulta.
+
+Pasaron 485 pruebas unitarias y 18 pruebas de integración en PostgreSQL 18. Las pruebas de consulta y subida cubren el orden, la paginación, los permisos, el borrado lógico y las respuestas `206` y `416` para rangos de MP4.
+
+Contrato de la historia y subtarea. [H18](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-26) · [BE-18.1](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-131)
+
 ## ER
 
 ```mermaid
