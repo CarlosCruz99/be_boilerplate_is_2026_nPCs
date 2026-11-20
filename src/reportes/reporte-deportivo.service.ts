@@ -35,10 +35,10 @@ export class ReporteDeportivoService {
             FROM partido
             WHERE temporada_id = ${temporadaId} AND estado = 'FINALIZADO'
           )
-          SELECT (SELECT COUNT(*) FROM oficial)::int AS "totalPartidos",
-                 (SELECT COALESCE(SUM(goles_local + goles_visitante), 0) FROM oficial)::int AS "totalGoles",
-                 (SELECT COALESCE(SUM(e.tarjetas), 0) FROM estadistica_partido e JOIN oficial o ON o.id = e.partido_id)::int AS "totalTarjetas",
-                 (SELECT COALESCE(SUM(e.asistencias), 0) FROM estadistica_partido e JOIN oficial o ON o.id = e.partido_id)::int AS "totalAsistencias"
+          SELECT (SELECT COUNT(*) FROM oficial)::double precision AS "totalPartidos",
+                 (SELECT COALESCE(SUM(goles_local + goles_visitante), 0) FROM oficial)::double precision AS "totalGoles",
+                 (SELECT COALESCE(SUM(e.tarjetas), 0) FROM estadistica_partido e JOIN oficial o ON o.id = e.partido_id)::double precision AS "totalTarjetas",
+                 (SELECT COALESCE(SUM(e.asistencias), 0) FROM estadistica_partido e JOIN oficial o ON o.id = e.partido_id)::double precision AS "totalAsistencias"
         `;
 
         const indicadores = filas[0];
