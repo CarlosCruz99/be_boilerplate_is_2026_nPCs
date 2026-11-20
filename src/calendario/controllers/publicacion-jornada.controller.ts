@@ -39,7 +39,7 @@ export class PublicacionJornadaController {
   @ApiOperation({
     summary: 'Publica una jornada y crea un aviso por capitán',
     description:
-      'Sin cuerpo. Excluye partidos CANCELADO. Publicación y avisos se confirman en una sola transacción. No admite republicar.',
+      'Sin cuerpo. Excluye partidos CANCELADO. H20 envía los avisos después de confirmar la publicación. No admite republicar.',
   })
   @ApiParam({ name: 'id', schema: { type: 'integer', minimum: 1 } })
   @ApiOkResponse({ type: JornadaPublicadaDto })

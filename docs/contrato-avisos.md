@@ -34,13 +34,24 @@ Destinatario usuario crea una fila. Destinatario equipo consulta capitán y juga
 
 La clave se aplica por destinatario. `skipDuplicates` y el índice único de DB-20.1 hacen que los reintentos y envíos simultáneos no dupliquen. Un reintento devuelve cero ids nuevos; no modifica el aviso anterior. Sin clave, dos llamadas pueden crear dos avisos.
 
-## Integración transaccional
+## Integración de los módulos · BE-20.2
 
-Se admite `send(dto, db)` con un `Prisma.TransactionClient` opcional. Sin cliente abre su propia transacción; con cliente participa en la del llamador, sin crear otra. El llamador debe propagar cualquier error para que se revierta también el evento de negocio.
+Los módulos confirman primero la operación y después llaman a `send()` con una clave estable. Si PostgreSQL devuelve un fallo transitorio, el envío se intenta hasta tres veces más con esperas de 50, 100 y 200 ms. Cada intento abre una transacción nueva. Los errores de validación, destinatario inexistente y otros fallos permanentes se reportan en el primer intento. Al agotar los reintentos, el módulo emisor registra el fallo y conserva la operación ya confirmada. Los reintentos de bandeja ocurren durante la solicitud.
+
+`send(dto, db)` admite una transacción del llamador para guardar el aviso y sus registros dependientes juntos. H15 la usa para programar el correo de cada equipo tras confirmar la edición. El reintento abarca esa transacción secundaria completa. Los envíos sin clave se intentan una vez.
+
+| Módulo | Evento | Tipo y referencia | Destinatario | Clave de idempotencia | Responsable backend |
+| --- | --- | --- | --- | --- | --- |
+| Calendario | H15 · Cambio de fecha, hora o cancha | `PARTIDO_MODIFICADO` · `PARTIDO` | Ambos equipos, una llamada por equipo | `partido-{id}-cambio-{cambioId}` | Enoc Melara |
+| Calendario | H16 · Publicación de jornada | `JORNADA_PUBLICADA` · `JORNADA` | Cada capitán con partido no cancelado | `jornada-{id}-capitan-{usuarioId}` | Carlos Cruz |
+| Pagos | H12 · Registro de cuota | `CUOTA_REGISTRADA` · `CUOTA` | Capitán del equipo | `cuota-{id}-registrada` | Carlos Cruz |
+| Pagos | H13 · Registro de pago | `PAGO_REGISTRADO` · `PAGO` | Capitán que registró el pago | `pago-{id}` | Carlos Cruz |
+| Resultados | H5 · Finalización del partido | `RESULTADO_FINALIZADO` · `PARTIDO` | Ambos equipos, una llamada por equipo | `partido-{id}-finalizado` | Carlos Cruz |
+| Resultados | H23 · Corrección oficial | `RESULTADO_CORREGIDO` · `PARTIDO` | Ambos equipos, una llamada por equipo | `partido-{id}-correccion-{correccionId}` | Enoc Melara |
 
 ```ts
-await prisma.$transaction(async (db) => {
-  // Publicar y enviar en la misma transacción; sin escrituras directas a aviso.
+// La publicación ya está confirmada.
+try {
   await avisos.send(
     {
       moduloOrigen: 'CALENDARIO',
@@ -59,12 +70,13 @@ await prisma.$transaction(async (db) => {
       },
       claveIdempotencia: `jornada-${jornadaId}-capitan-${capitanId}`,
     },
-    db,
   );
-});
+} catch (error) {
+  logger.error({ evento: 'AVISO_JORNADA_PUBLICADA_FALLIDO', jornadaId });
+}
 ```
 
-El servicio central escribe los avisos de la aplicación. Los módulos le delegan la creación y pueden consultar los avisos persistidos para procesar sus propias entregas.
+`AvisosModule` concentra las escrituras sobre `aviso`. Los demás módulos pueden leer avisos persistidos para procesar sus entregas. `test/avisos/centralizacion.spec.ts` verifica el código de aplicación y se ejecuta con `npm test`.
 
 ## Aviso por cambio de partido · BE-15.1
 
@@ -92,11 +104,13 @@ aviso y se guardan los identificadores en el historial de cambios.
 
 ## Correo por cambio de partido · BE-15.2
 
-La edición registra una entrega pendiente por destinatario en la misma
+El envío de H15 registra una entrega pendiente por destinatario en la misma
 transacción que el aviso. Después de confirmar, el proceso de correo de H15
 toma las entregas con un bloqueo de fila y usa el título y el mensaje del aviso.
 Un fallo temporal admite hasta tres reintentos, con 30 segundos entre intentos.
-El estado de la entrega se guarda por separado del aviso de la bandeja.
+El estado de la entrega se guarda por separado del aviso de la bandeja. El
+proceso también lee las entregas pendientes con la clave anterior
+`cambio-partido-{cambioId}`.
 
 Para activar el envío, configura `RESEND_API_KEY` y `H15_CORREO_REMITENTE`
 con un remitente autorizado por Resend. Con ambas variables vacías, la app
@@ -105,4 +119,8 @@ destinatario en todos los intentos. Las entregas pendientes de 23 horas o más
 pasan a fallidas al procesarse para respetar la ventana de deduplicación del
 proveedor. [Idempotencia de Resend](https://resend.com/docs/dashboard/emails/idempotency-keys)
 
-Fuentes: [BE-20.1 / NPCS-144](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-144), [DB-20.1 / NPCS-143](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-143). El servicio se agregó como dependencia autorizada de BE-16.1. La revisión y coordinación de su adopción con el responsable de H20 queda para el PR; no se actualizaron estados de Jira ni se enviaron mensajes a otros integrantes.
+## Verificación de BE-20.2
+
+Pasaron 485 pruebas unitarias y 102 de integración en PostgreSQL 18. Las suites de calendario, pagos, resultados y bandeja verifican los seis eventos. Las pruebas de H16 simulan conflictos de serialización y comprueban el cuarto intento, el límite de reintentos y la conservación de la publicación. Las de H15 comprueban fallos al guardar el aviso o su entrega, además de las claves de correo anteriores. La compilación y el análisis estático finalizaron correctamente con dos advertencias preexistentes en los tests de seed.
+
+Requisitos en Jira. [BE-20.2](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-145) · [BE-20.1](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-144) · [DB-20.1](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-143)

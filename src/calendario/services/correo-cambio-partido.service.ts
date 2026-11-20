@@ -65,7 +65,12 @@ export class CorreoCambioPartidoService
         JOIN cambio_partido c ON c.id = e.cambio_id
         JOIN usuario u ON u.id = e.usuario_id
         JOIN aviso a ON a.usuario_id = e.usuario_id
-          AND a.clave_idempotencia = 'cambio-partido-' || e.cambio_id::text
+          AND a.tipo = 'PARTIDO_MODIFICADO' AND a.referencia_tipo = 'PARTIDO'
+          AND a.referencia_id = c.partido_id
+          AND a.clave_idempotencia IN (
+            'partido-' || c.partido_id::text || '-cambio-' || e.cambio_id::text,
+            'cambio-partido-' || e.cambio_id::text
+          )
         WHERE e.estado = 'PENDIENTE'
           AND (e.ultimo_intento_en IS NULL OR e.ultimo_intento_en <= now() - interval '30 seconds')
         ORDER BY e.cambio_id, e.usuario_id

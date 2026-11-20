@@ -1,5 +1,5 @@
 import type { PrismaService } from '@Prisma/services';
-import type { Prisma } from '@PrismaClient';
+import { Prisma } from '@PrismaClient';
 import { AvisosService } from './avisos.service.js';
 import type { CrearAvisoDto } from '../avisos.contract.js';
 
@@ -11,16 +11,14 @@ describe('AvisosService', () => {
         .mockResolvedValue({ id: '00000000-0000-4000-8000-000000000012' }),
     };
     const equipo = {
-      findFirst: vi
-        .fn()
-        .mockResolvedValue({
-          capitanId: 'capitan',
-          jugadores: [
-            { jugador: { usuarioId: 'capitan' } },
-            { jugador: { usuarioId: 'jugador' } },
-            { jugador: { usuarioId: null } },
-          ],
-        }),
+      findFirst: vi.fn().mockResolvedValue({
+        capitanId: 'capitan',
+        jugadores: [
+          { jugador: { usuarioId: 'capitan' } },
+          { jugador: { usuarioId: 'jugador' } },
+          { jugador: { usuarioId: null } },
+        ],
+      }),
     };
     const aviso = {
       createManyAndReturn: vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
@@ -78,9 +76,26 @@ describe('AvisosService', () => {
     });
   });
   it('propaga el fallo del lote para que la transacción se revierta', async () => {
-    const { servicio, db } = escenario();
+    const { servicio, db, transaction } = escenario();
     db.aviso.createManyAndReturn.mockRejectedValue(new Error('fallo'));
     await expect(servicio.send(dto)).rejects.toThrow('fallo');
+    expect(transaction).toHaveBeenCalledTimes(1);
+  });
+  it('propaga un fallo transitorio en un envío sin clave o en la transacción del llamador', async () => {
+    const { servicio, db, transaction } = escenario();
+    const fallo = new Prisma.PrismaClientKnownRequestError('Conflicto', {
+      code: 'P2034',
+      clientVersion: 'prueba',
+    });
+    db.aviso.createManyAndReturn.mockRejectedValue(fallo);
+    await expect(
+      servicio.send({ ...dto, claveIdempotencia: undefined }),
+    ).rejects.toBe(fallo);
+    await expect(
+      servicio.send(dto, db as unknown as Prisma.TransactionClient),
+    ).rejects.toBe(fallo);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(db.aviso.createManyAndReturn).toHaveBeenCalledTimes(2);
   });
   it('no escribe con destinatario inexistente o datos inválidos', async () => {
     const { servicio, db } = escenario();

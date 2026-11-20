@@ -360,7 +360,7 @@ describe('BE-23.1 · corrección oficial', () => {
       expect(aviso).toMatchObject({
         titulo: 'Resultado corregido',
         mensaje: 'El resultado del partido de la jornada 1 se corrigió a 1-3.',
-        clave_idempotencia: `correccion-partido-${correccionId}`,
+        clave_idempotencia: `partido-${partidoId}-correccion-${correccionId}`,
       });
     }
   });

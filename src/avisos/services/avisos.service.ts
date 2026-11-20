@@ -10,6 +10,7 @@ import type {
   ResultadoEnvioAvisos,
 } from '../avisos.contract.js';
 import { validarAviso } from '../dto/validar-aviso.js';
+import { reintentarEnvioAviso } from './reintentar-envio-aviso.js';
 
 @Injectable()
 export class AvisosService {
@@ -94,7 +95,10 @@ export class AvisosService {
         avisoIds: creados.map((a) => a.id),
       };
     };
-    // H16 comparte su transacción: no queda PUBLICADA si falla algún aviso.
-    return transaccion ? enviar(transaccion) : this.prisma.$transaction(enviar);
+    if (transaccion) return enviar(transaccion);
+    const confirmar = () => this.prisma.$transaction(enviar);
+    return dto.claveIdempotencia
+      ? reintentarEnvioAviso(confirmar)
+      : confirmar();
   }
 }

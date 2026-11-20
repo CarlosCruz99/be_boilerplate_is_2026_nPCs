@@ -547,6 +547,15 @@ describe('BE-3.1: partidos y árbitros', () => {
     );
     await editar(id, { canchaId: canchas[1] }).expect(200);
 
+    // Simula una entrega generada antes del cambio de formato de las claves.
+    await db.query(
+      `UPDATE aviso a SET clave_idempotencia = 'cambio-partido-' || e.cambio_id
+       FROM entrega_correo e JOIN cambio_partido c ON c.id=e.cambio_id
+       WHERE c.partido_id=$1 AND e.usuario_id=$2 AND a.usuario_id=e.usuario_id
+         AND a.referencia_id=c.partido_id AND a.tipo='PARTIDO_MODIFICADO'`,
+      [id, usuarios[1]],
+    );
+
     const workerPath =
       '../dist/calendario/services/correo-cambio-partido.service.js';
     const proveedorPath =
@@ -623,42 +632,57 @@ describe('BE-3.1: partidos y árbitros', () => {
     expect((guardado.rows[0].inicio as Date).toISOString()).toBe(fecha(7));
   });
 
-  it('revierte la edición y todos los avisos si falla un destinatario de H15', async () => {
-    const r = await crear().expect(201);
-    const id = r.body.id as number;
-    await db.query(
-      "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=$2 WHERE temporada_id=$1",
-      [temporadaId, organizadorId],
-    );
-    const nombre = `be15_fallo_${randomUUID().replaceAll('-', '')}`;
-    await db.query(
-      `CREATE FUNCTION ${nombre}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fallo BE15 de prueba'; END; $$`,
-    );
-    try {
+  it.each(['aviso', 'entrega_correo'])(
+    'conserva la edición y el envío al otro equipo si falla %s',
+    async (tabla) => {
+      const r = await crear().expect(201);
+      const id = r.body.id as number;
       await db.query(
-        `CREATE TRIGGER ${nombre} BEFORE INSERT ON aviso FOR EACH ROW WHEN (NEW.usuario_id='${usuarios[1]}'::uuid AND NEW.tipo='PARTIDO_MODIFICADO') EXECUTE FUNCTION ${nombre}()`,
+        "UPDATE jornada SET estado='PUBLICADA',publicada_en=now(),publicada_por=$2 WHERE temporada_id=$1",
+        [temporadaId, organizadorId],
       );
-      await editar(id, { canchaId: canchas[1] }).expect(500);
-      const partido = await db.query(
-        'SELECT cancha_id FROM partido WHERE id=$1',
-        [id],
+      const nombre = `be15_fallo_${randomUUID().replaceAll('-', '')}`;
+      await db.query(
+        `CREATE FUNCTION ${nombre}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fallo BE15 de prueba'; END; $$`,
       );
-      expect(partido.rows).toEqual([{ cancha_id: canchas[0] }]);
-      const cambios = await db.query(
-        'SELECT 1 FROM cambio_partido WHERE partido_id=$1',
-        [id],
-      );
-      const avisos = await db.query(
-        "SELECT 1 FROM aviso WHERE tipo='PARTIDO_MODIFICADO' AND referencia_tipo='PARTIDO' AND referencia_id=$1",
-        [id],
-      );
-      expect(cambios.rowCount).toBe(0);
-      expect(avisos.rowCount).toBe(0);
-    } finally {
-      await db.query(`DROP TRIGGER IF EXISTS ${nombre} ON aviso`);
-      await db.query(`DROP FUNCTION ${nombre}()`);
-    }
-  });
+      try {
+        const filtro =
+          tabla === 'aviso' ? "AND NEW.tipo='PARTIDO_MODIFICADO'" : '';
+        await db.query(
+          `CREATE TRIGGER ${nombre} BEFORE INSERT ON ${tabla} FOR EACH ROW WHEN (NEW.usuario_id='${usuarios[1]}'::uuid ${filtro}) EXECUTE FUNCTION ${nombre}()`,
+        );
+        await editar(id, { canchaId: canchas[1] }).expect(200);
+        const partido = await db.query(
+          'SELECT cancha_id FROM partido WHERE id=$1',
+          [id],
+        );
+        expect(partido.rows).toEqual([{ cancha_id: canchas[1] }]);
+        const cambios = await db.query(
+          'SELECT id FROM cambio_partido WHERE partido_id=$1',
+          [id],
+        );
+        const avisos = await db.query(
+          "SELECT usuario_id, clave_idempotencia FROM aviso WHERE tipo='PARTIDO_MODIFICADO' AND referencia_tipo='PARTIDO' AND referencia_id=$1",
+          [id],
+        );
+        expect(cambios.rowCount).toBe(1);
+        expect(avisos.rows).toEqual([
+          {
+            usuario_id: usuarios[0],
+            clave_idempotencia: `partido-${id}-cambio-${cambios.rows[0].id}`,
+          },
+        ]);
+        const entregas = await db.query(
+          'SELECT usuario_id FROM entrega_correo WHERE cambio_id=$1',
+          [cambios.rows[0].id],
+        );
+        expect(entregas.rows).toEqual([{ usuario_id: usuarios[0] }]);
+      } finally {
+        await db.query(`DROP TRIGGER IF EXISTS ${nombre} ON ${tabla}`);
+        await db.query(`DROP FUNCTION ${nombre}()`);
+      }
+    },
+  );
 
   it('revierte partido y jornada si falla la confirmación de la transacción', async () => {
     const nombre = `be31_fallo_${randomUUID().replaceAll('-', '')}`;

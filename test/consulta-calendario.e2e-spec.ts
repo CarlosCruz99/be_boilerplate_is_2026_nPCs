@@ -350,6 +350,8 @@ describe('BE-4.1 calendario del equipo', () => {
       await db.query(
         `DELETE FROM aviso WHERE clave_idempotencia IN (
            SELECT 'cambio-partido-' || id FROM (${cambios}) AS cambios
+           UNION ALL
+           SELECT 'partido-' || $1::integer || '-cambio-' || id FROM (${cambios}) AS cambios
          )`,
         [original.id, historial.ultimo],
       );

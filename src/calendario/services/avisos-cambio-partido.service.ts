@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { CampoCambioPartido, Prisma } from '@PrismaClient';
+import { PrismaService } from '@Prisma/services';
+import type { CrearAvisoDto } from '../../avisos/avisos.contract.js';
 import { AvisosService } from '../../avisos/services/avisos.service.js';
+import { reintentarEnvioAviso } from '../../avisos/services/reintentar-envio-aviso.js';
 import { fechaCivilSalvador } from '../utils/fecha-salvador.js';
 
 interface HorarioPartido {
@@ -23,6 +26,16 @@ interface Cambio {
   valorNuevo: string;
 }
 
+type AvisoCambio = CrearAvisoDto & {
+  referencia: { tipo: 'PARTIDO'; id: number };
+  claveIdempotencia: string;
+};
+
+interface AvisosCambioPartido {
+  cambioId: number;
+  avisos: AvisoCambio[];
+}
+
 const formatoHora = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'America/El_Salvador',
   hourCycle: 'h23',
@@ -34,7 +47,12 @@ const formatoHora = new Intl.DateTimeFormat('en-GB', {
 
 @Injectable()
 export class AvisosCambioPartidoService {
-  constructor(private readonly avisos: AvisosService) {}
+  private readonly logger = new Logger(AvisosCambioPartidoService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avisos: AvisosService,
+  ) {}
 
   async registrar(
     db: Prisma.TransactionClient,
@@ -42,7 +60,7 @@ export class AvisosCambioPartidoService {
     organizadorId: string,
     anterior: HorarioPartido,
     partido: PartidoEditado,
-  ): Promise<void> {
+  ): Promise<AvisosCambioPartido | undefined> {
     const cambios: Cambio[] = [
       {
         campoModificado: 'FECHA',
@@ -91,11 +109,12 @@ export class AvisosCambioPartidoService {
           `${campoModificado}: ${valorAnterior} → ${valorNuevo}`,
       )
       .join('. ');
-    const claveIdempotencia = `cambio-partido-${cambioId}`;
-    for (const equipoId of [partido.equipoLocalId, partido.equipoVisitanteId]) {
+    const claveIdempotencia = `partido-${partido.id}-cambio-${cambioId}`;
+    return {
+      cambioId,
       // La misma clave deduplica a quien pertenece a ambos grupos de destinatarios.
-      await this.avisos.send(
-        {
+      avisos: [partido.equipoLocalId, partido.equipoVisitanteId].map(
+        (equipoId) => ({
           moduloOrigen: 'CALENDARIO',
           tipo: 'PARTIDO_MODIFICADO',
           destinatario: { equipoId, temporadaId },
@@ -104,16 +123,36 @@ export class AvisosCambioPartidoService {
           referencia: { tipo: 'PARTIDO', id: partido.id },
           datos: { equipoLocal, equipoVisitante, cambios: detalles },
           claveIdempotencia,
-        },
-        db,
-      );
+        }),
+      ),
+    };
+  }
+
+  async enviar({ cambioId, avisos }: AvisosCambioPartido): Promise<void> {
+    for (const aviso of avisos) {
+      try {
+        await reintentarEnvioAviso(() =>
+          this.prisma.$transaction(async (db) => {
+            await this.avisos.send(aviso, db);
+            // Cada aviso y su entrega de correo se confirman juntos después de la edición.
+            await db.$executeRaw`
+              INSERT INTO entrega_correo(cambio_id, usuario_id)
+              SELECT ${cambioId}, usuario_id FROM aviso
+              WHERE clave_idempotencia = ${aviso.claveIdempotencia}
+                AND tipo = 'PARTIDO_MODIFICADO' AND referencia_id = ${aviso.referencia.id}
+              ON CONFLICT (cambio_id, usuario_id) DO NOTHING
+            `;
+          }),
+        );
+      } catch (error) {
+        this.logger.error({
+          evento: 'AVISO_PARTIDO_MODIFICADO_FALLIDO',
+          cambioId,
+          partidoId: aviso.referencia.id,
+          destinatario: aviso.destinatario,
+          error: error instanceof Error ? error.name : 'Error desconocido',
+        });
+      }
     }
-    await db.$executeRaw`
-      INSERT INTO entrega_correo(cambio_id, usuario_id)
-      SELECT ${cambioId}, usuario_id FROM aviso
-      WHERE clave_idempotencia = ${claveIdempotencia}
-        AND tipo = 'PARTIDO_MODIFICADO' AND referencia_id = ${partido.id}
-      ON CONFLICT (cambio_id, usuario_id) DO NOTHING
-    `;
   }
 }
