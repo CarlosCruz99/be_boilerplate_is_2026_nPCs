@@ -274,7 +274,7 @@ describe('BE-16.1: publicación y servicio central de avisos', () => {
     expect(await avisosJornada()).toHaveLength(4);
   }, 15000);
 
-  it('revierte publicación y avisos previos si falla un destinatario posterior', async () => {
+  it('conserva la publicación y los avisos de otros capitanes si un destinatario falla', async () => {
     const nombre = `be16_fallo_${randomUUID().replaceAll('-', '')}`;
     await db.query(
       `CREATE FUNCTION ${nombre}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Fallo BE16 de prueba'; END; $$`,
@@ -283,18 +283,58 @@ describe('BE-16.1: publicación y servicio central de avisos', () => {
       await db.query(
         `CREATE TRIGGER ${nombre} BEFORE INSERT ON aviso FOR EACH ROW WHEN (NEW.usuario_id='${capitanes[2]}'::uuid AND NEW.referencia_id=${jornadaId}) EXECUTE FUNCTION ${nombre}()`,
       );
-      await publicar().expect(500);
-      expect(await avisosJornada()).toHaveLength(0);
+      await publicar().expect(200);
+      expect((await avisosJornada()).map((aviso) => aviso.usuario_id)).toEqual([
+        capitanes[0],
+        capitanes[1],
+        capitanes[3],
+      ]);
       expect(await estado()).toEqual({
-        estado: 'BORRADOR',
-        publicada_en: null,
-        publicada_por: null,
+        estado: 'PUBLICADA',
+        publicada_en: expect.any(Date),
+        publicada_por: organizadorId,
       });
     } finally {
       await db.query(`DROP TRIGGER IF EXISTS ${nombre} ON aviso`);
       await db.query(`DROP FUNCTION ${nombre}()`);
     }
   });
+
+  it.each([3, 4])(
+    'limita a tres los reintentos de H20 cuando hay %i fallos transitorios',
+    async (fallos) => {
+      const nombre = `be20_jornada_${randomUUID().replaceAll('-', '')}`;
+      const intentos = `${nombre}_intentos`;
+      await db.query(`CREATE SEQUENCE ${intentos}`);
+      try {
+        await db.query(`CREATE FUNCTION ${nombre}() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF nextval('${intentos}') <= ${fallos} THEN
+            RAISE EXCEPTION 'Conflicto transitorio de prueba' USING ERRCODE = '40001';
+          END IF;
+          RETURN NEW;
+        END; $$`);
+        await db.query(`CREATE TRIGGER ${nombre} BEFORE INSERT ON aviso FOR EACH ROW
+        WHEN (NEW.usuario_id='${capitanes[2]}'::uuid AND NEW.tipo='JORNADA_PUBLICADA' AND NEW.referencia_id=${jornadaId})
+        EXECUTE FUNCTION ${nombre}()`);
+        await publicar().expect(200);
+        expect((await estado()).estado).toBe('PUBLICADA');
+        const contador = await db.query<{ total: number }>(
+          `SELECT last_value::int AS total FROM ${intentos}`,
+        );
+        expect(contador.rows[0].total).toBe(4);
+        const creados = await avisosJornada();
+        expect(creados).toHaveLength(fallos === 3 ? 4 : 3);
+        expect(
+          creados.filter((aviso) => aviso.usuario_id === capitanes[2]),
+        ).toHaveLength(fallos === 3 ? 1 : 0);
+      } finally {
+        await db.query(`DROP TRIGGER IF EXISTS ${nombre} ON aviso`);
+        await db.query(`DROP FUNCTION IF EXISTS ${nombre}()`);
+        await db.query(`DROP SEQUENCE ${intentos}`);
+      }
+    },
+  );
 
   it('el servicio central guarda un usuario y omite reintentos con la misma clave', async () => {
     const dto = envio();

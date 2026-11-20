@@ -203,7 +203,7 @@ export class CorreccionPartidoService {
               titulo: 'Resultado corregido',
               mensaje: `El resultado del partido de la jornada ${partido.jornada.numero} se corrigió a ${despues.golesLocal}-${despues.golesVisitante}.`,
               referencia: { tipo: 'PARTIDO', id: partidoId },
-              claveIdempotencia: `correccion-partido-${correccionId}`,
+              claveIdempotencia: `partido-${partidoId}-correccion-${correccionId}`,
             });
           } catch (error) {
             this.logger.error({

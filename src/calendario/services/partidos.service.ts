@@ -126,8 +126,9 @@ export class PartidosService {
         'La cancelación debe enviarse sin otros cambios.',
       );
     }
+    let resultado;
     try {
-      return await this.prisma.$transaction(
+      resultado = await this.prisma.$transaction(
         async (db) => {
           const referencia = await db.partido.findUnique({
             where: { id },
@@ -164,7 +165,7 @@ export class PartidosService {
               data: { estado: 'CANCELADO' },
               select: partidoSelect,
             });
-            return this.respuesta(cancelado);
+            return { respuesta: this.respuesta(cancelado) };
           }
           const inicio =
             dto.inicio === undefined ? anterior.inicio : new Date(dto.inicio);
@@ -189,22 +190,26 @@ export class PartidosService {
             where: { id },
             select: partidoParaEdicionSelect,
           });
-          if (anterior.jornada.estado === 'PUBLICADA') {
-            await this.avisosCambio.registrar(
-              db,
-              referencia.temporadaId,
-              organizadorId,
-              anterior,
-              actualizado,
-            );
-          }
-          return this.respuesta(actualizado);
+          const notificacion =
+            anterior.jornada.estado === 'PUBLICADA'
+              ? await this.avisosCambio.registrar(
+                  db,
+                  referencia.temporadaId,
+                  organizadorId,
+                  anterior,
+                  actualizado,
+                )
+              : undefined;
+          return { respuesta: this.respuesta(actualizado), notificacion };
         },
         { isolationLevel: 'ReadCommitted' },
       );
     } catch (error) {
       traducirConflictoPartido(error);
     }
+    if (resultado.notificacion)
+      await this.avisosCambio.enviar(resultado.notificacion);
+    return resultado.respuesta;
   }
 
   private async bloquearTemporada(

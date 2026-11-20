@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -11,13 +12,18 @@ import type { JornadaPublicadaDto } from '../dto/publicacion-jornada.dto.js';
 
 @Injectable()
 export class PublicacionJornadaService {
+  private readonly logger = new Logger(PublicacionJornadaService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly avisos: AvisosService,
   ) {}
 
-  publicar(id: number, organizadorId: string): Promise<JornadaPublicadaDto> {
-    return this.prisma.$transaction(
+  async publicar(
+    id: number,
+    organizadorId: string,
+  ): Promise<JornadaPublicadaDto> {
+    const { respuesta, avisos } = await this.prisma.$transaction(
       async (db) => {
         const referencia = await db.jornada.findUnique({
           where: { id },
@@ -58,18 +64,30 @@ export class PublicacionJornadaService {
             publicadaPorId: organizadorId,
           },
         });
-        for (const aviso of avisosPublicacion(jornada, partidos)) {
-          // Solo H20 escribe avisos; se comparte la transacción para que un
-          // fallo en cualquier destinatario revierta publicación y todos los avisos.
-          await this.avisos.send(aviso, db);
-        }
         return {
-          id,
-          estado: 'PUBLICADA' as const,
-          publicadaEn: publicadaEn.toISOString(),
+          respuesta: {
+            id,
+            estado: 'PUBLICADA' as const,
+            publicadaEn: publicadaEn.toISOString(),
+          },
+          avisos: avisosPublicacion(jornada, partidos),
         };
       },
       { isolationLevel: 'ReadCommitted', timeout: 15000 },
     );
+
+    for (const aviso of avisos) {
+      try {
+        await this.avisos.send(aviso);
+      } catch (error) {
+        this.logger.error({
+          evento: 'AVISO_JORNADA_PUBLICADA_FALLIDO',
+          jornadaId: id,
+          destinatario: aviso.destinatario,
+          error: error instanceof Error ? error.name : 'Error desconocido',
+        });
+      }
+    }
+    return respuesta;
   }
 }
