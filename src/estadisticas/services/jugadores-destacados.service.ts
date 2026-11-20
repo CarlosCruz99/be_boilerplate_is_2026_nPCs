@@ -28,7 +28,7 @@ export class JugadoresDestacadosService {
         const jugadores = await db.$queryRaw<JugadorDestacadoDto[]>`
           SELECT x.jugador_id AS "jugadorId",
                  j.nombre_completo AS "nombre",
-                 x.total,
+                 x.total::double precision AS total,
                  DENSE_RANK() OVER (ORDER BY x.total DESC)::int AS "posicion"
           FROM (
             SELECT e.jugador_id,
@@ -37,7 +37,7 @@ export class JugadoresDestacadosService {
                        WHEN 'goles' THEN e.goles
                        WHEN 'asistencias' THEN e.asistencias
                      END
-                   )::int AS total
+                   ) AS total
             FROM estadistica_partido e
             JOIN partido p ON p.id = e.partido_id
             JOIN equipo_jugador ej ON ej.jugador_id = e.jugador_id AND ej.temporada_id = p.temporada_id

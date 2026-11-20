@@ -36,10 +36,13 @@ import { DetalleMarcadorController } from './controllers/detalle-marcador.contro
 import { DetalleMarcadorService } from './services/detalle-marcador.service.js';
 import { EstadisticasPartidoController } from './controllers/estadisticas-partido.controller.js';
 import { EstadisticasPartidoService } from './services/estadisticas-partido.service.js';
+import { CorreccionPartidoController } from './controllers/correccion-partido.controller.js';
+import { CorreccionPartidoService } from './services/correccion-partido.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    CorreccionPartidoController,
     DetalleMarcadorController,
     ListadoPartidosController,
     EstadisticasPartidoController,
@@ -57,6 +60,7 @@ import { EstadisticasPartidoService } from './services/estadisticas-partido.serv
     ConsultaCalendarioController,
   ],
   providers: [
+    CorreccionPartidoService,
     DetalleMarcadorService,
     ListadoPartidosService,
     EstadisticasPartidoService,
