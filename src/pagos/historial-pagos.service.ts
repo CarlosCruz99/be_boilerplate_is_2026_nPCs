@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '@Prisma/services';
 import type { User } from '@PrismaClient';
 import { ComprobantesService } from './comprobantes.service.js';
+import { descargarComprobante } from './descargar-comprobante.js';
 import { centavosPago, dinero } from './pago.dto.js';
 import type {
   HistorialPagosDto,
@@ -144,28 +145,6 @@ export class HistorialPagosService {
     });
     if (!pago) throw new NotFoundException('El pago no existe.');
     autorizarHistorial(usuario, pago.cuota.equipo.capitanId);
-    let archivo: Buffer;
-    try {
-      archivo = await this.comprobantes.leer(pago.comprobanteClave);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-        throw new NotFoundException('El comprobante no existe.');
-      throw error;
-    }
-    const extensiones: Record<string, string> = {
-      'application/pdf': 'pdf',
-      'image/jpeg': 'jpg',
-      'image/png': 'png',
-    };
-    const extension = extensiones[pago.comprobanteMime];
-    if (!extension || archivo.length !== pago.comprobanteBytes)
-      throw new InternalServerErrorException(
-        'No se pudo recuperar el comprobante.',
-      );
-    return new StreamableFile(archivo, {
-      type: pago.comprobanteMime,
-      length: archivo.length,
-      disposition: `attachment; filename="pago-${pagoId}.${extension}"`,
-    });
+    return descargarComprobante(this.comprobantes, pagoId, pago);
   }
 }
