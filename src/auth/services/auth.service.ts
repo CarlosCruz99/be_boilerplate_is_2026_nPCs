@@ -1,10 +1,13 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import { UsersService } from '@Users/services';
+import { PrismaService } from '@Prisma/services';
 import { TokenService } from './token.service.js';
 import type { LoginDto } from '@Auth/dto';
+import type { CurrentSessionDto } from '../dto/current-session.dto.js';
 import type { TokenPair } from '@Auth/types';
 import type { User } from '@PrismaClient';
+import type { CreateUserDto } from '@Users/dto';
 
 /**
  * Hash descartable con el que se compara cuando el email no existe.
@@ -14,14 +17,38 @@ import type { User } from '@PrismaClient';
  * diferencia de tiempo permite enumerar qué emails están registrados.
  * Corresponde a un valor aleatorio; nunca va a matchear.
  */
-const DUMMY_HASH = '$2b$12$C6UzMDM.H6dfI/f/IKcEe.7ttRFZIqjvBeT3M1kRDRm1gy9cKr9Wy';
+const DUMMY_HASH =
+  '$2b$12$C6UzMDM.H6dfI/f/IKcEe.7ttRFZIqjvBeT3M1kRDRm1gy9cKr9Wy';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly tokenService: TokenService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  register(dto: CreateUserDto): Promise<{ user: User; tokens: TokenPair }> {
+    return this.prisma.$transaction(async (db) => {
+      const user = await this.usersService.create(dto, db);
+      return { user, tokens: await this.tokenService.issueTokenPair(user, db) };
+    });
+  }
+
+  async currentSession({
+    id,
+    email,
+    nombre,
+    rol,
+  }: User): Promise<CurrentSessionDto> {
+    return {
+      id,
+      email,
+      nombre,
+      rol,
+      ...(await this.usersService.findCurrentTeams(id)),
+    };
+  }
 
   async login(dto: LoginDto): Promise<{ user: User; tokens: TokenPair }> {
     const user = await this.validateCredentials(dto.email, dto.password);

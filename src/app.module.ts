@@ -5,8 +5,14 @@ import { AuthModule } from '@Auth';
 import { JwtAuthGuard } from '@Auth/guards';
 import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
-import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { CalendarioModule } from './calendario/calendario.module.js';
+import { InscripcionesModule } from './inscripciones/inscripciones.module.js';
+import { CuotasModule } from './cuotas/cuotas.module.js';
+import { PagosModule } from './pagos/pagos.module.js';
+import { GaleriaModule } from './galeria/galeria.module.js';
+import { EstadisticasModule } from './estadisticas/estadisticas.module.js';
+import { ReportesModule } from './reportes/reportes.module.js';
 
 @Module({
   imports: [
@@ -18,8 +24,14 @@ import { validateEnv } from '@Config';
     }),
     PrismaModule,
     HealthModule,
-    UsersModule,
     AuthModule,
+    InscripcionesModule,
+    CalendarioModule,
+    CuotasModule,
+    PagosModule,
+    GaleriaModule,
+    EstadisticasModule,
+    ReportesModule,
   ],
   providers: [
     {

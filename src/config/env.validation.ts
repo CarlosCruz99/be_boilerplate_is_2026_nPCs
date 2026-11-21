@@ -14,6 +14,9 @@ export interface EnvConfig {
   JWT_EXPIRES_IN: string;
   REFRESH_TOKEN_EXPIRES_IN_DAYS: number;
   BCRYPT_SALT_ROUNDS: number;
+  UPLOADS_DIR: string;
+  RESEND_API_KEY: string;
+  H15_CORREO_REMITENTE: string;
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -69,13 +72,26 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     );
   }
 
+  const resendApiKey = readString(raw, 'RESEND_API_KEY', '').trim();
+  const correoRemitente = readString(raw, 'H15_CORREO_REMITENTE', '').trim();
+  if (Boolean(resendApiKey) !== Boolean(correoRemitente)) {
+    throw new Error('Configura RESEND_API_KEY y H15_CORREO_REMITENTE juntos.');
+  }
+
   return {
     NODE_ENV: readString(raw, 'NODE_ENV', 'development'),
     PORT: readInt(raw, 'PORT', 3000),
     DATABASE_URL: readString(raw, 'DATABASE_URL', ''),
     JWT_SECRET: jwtSecret,
     JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '15m'),
-    REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
+    REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(
+      raw,
+      'REFRESH_TOKEN_EXPIRES_IN_DAYS',
+      7,
+    ),
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
+    UPLOADS_DIR: readString(raw, 'UPLOADS_DIR', 'uploads'),
+    RESEND_API_KEY: resendApiKey,
+    H15_CORREO_REMITENTE: correoRemitente,
   };
 }

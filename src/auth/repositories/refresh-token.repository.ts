@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import type { RefreshToken, User } from '@PrismaClient';
+import type { Prisma, RefreshToken, User } from '@PrismaClient';
 
 export interface CreateRefreshTokenData {
   tokenHash: string;
@@ -21,8 +21,11 @@ export type RefreshTokenWithUser = RefreshToken & { user: User };
 export class RefreshTokenRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: CreateRefreshTokenData): Promise<RefreshToken> {
-    return this.prisma.refreshToken.create({ data });
+  create(
+    data: CreateRefreshTokenData,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<RefreshToken> {
+    return db.refreshToken.create({ data });
   }
 
   /** Busca por hash trayendo el usuario, para validar la sesión en una sola query. */

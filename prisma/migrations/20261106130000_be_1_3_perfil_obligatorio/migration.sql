@@ -1,0 +1,3 @@
+ALTER TABLE usuario
+  ALTER COLUMN nombre DROP DEFAULT,
+  ALTER COLUMN fecha_nacimiento DROP DEFAULT;

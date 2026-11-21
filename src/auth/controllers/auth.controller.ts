@@ -1,4 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNoContentResponse,
@@ -10,7 +17,7 @@ import {
 import { AuthService } from '@Auth/services';
 import { CurrentUser, Public } from '@Auth/decorators';
 import { AuthResponseDto, LoginDto, RefreshTokenDto } from '@Auth/dto';
-import { UserResponseDto } from '@Users/dto';
+import { CurrentSessionDto } from '../dto/current-session.dto.js';
 import type { User } from '@PrismaClient';
 
 @ApiTags('auth')
@@ -40,7 +47,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Renueva el access token rotando el refresh token' })
   @ApiOkResponse({ type: AuthResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Refresh token inválido, expirado o ya utilizado.' })
+  @ApiUnauthorizedResponse({
+    description: 'Refresh token inválido, expirado o ya utilizado.',
+  })
   async refresh(@Body() dto: RefreshTokenDto): Promise<AuthResponseDto> {
     const { user, tokens } = await this.authService.refresh(dto.refreshToken);
     return AuthResponseDto.from(user, tokens);
@@ -60,9 +69,9 @@ export class AuthController {
   @Get('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Devuelve el usuario autenticado' })
-  @ApiOkResponse({ type: UserResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Token ausente, inválido o expirado.' })
-  me(@CurrentUser() user: User): UserResponseDto {
-    return UserResponseDto.fromEntity(user);
+  @ApiOkResponse({ type: CurrentSessionDto })
+  @ApiUnauthorizedResponse({ description: 'Sesión no válida. Inicia sesión.' })
+  me(@CurrentUser() user: User): Promise<CurrentSessionDto> {
+    return this.authService.currentSession(user);
   }
 }

@@ -5,7 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { RefreshTokenRepository } from '@Auth/repositories';
 import type { AccessTokenPayload, TokenPair } from '@Auth/types';
 import type { EnvConfig } from '@Config';
-import type { User } from '@PrismaClient';
+import type { Prisma, User } from '@PrismaClient';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const REFRESH_TOKEN_BYTES = 32;
@@ -38,7 +38,10 @@ export class TokenService {
   }
 
   /** Emite un par de tokens nuevo y persiste el refresh token. */
-  async issueTokenPair(user: User): Promise<TokenPair> {
+  async issueTokenPair(
+    user: User,
+    db?: Prisma.TransactionClient,
+  ): Promise<TokenPair> {
     const payload: AccessTokenPayload = {
       sub: user.id,
       email: user.email,
@@ -47,11 +50,14 @@ export class TokenService {
     const accessToken = await this.jwtService.signAsync(payload);
     const refreshToken = randomBytes(REFRESH_TOKEN_BYTES).toString('hex');
 
-    await this.refreshTokenRepository.create({
-      tokenHash: this.hashToken(refreshToken),
-      userId: user.id,
-      expiresAt: new Date(Date.now() + this.refreshTokenTtlMs),
-    });
+    await this.refreshTokenRepository.create(
+      {
+        tokenHash: this.hashToken(refreshToken),
+        userId: user.id,
+        expiresAt: new Date(Date.now() + this.refreshTokenTtlMs),
+      },
+      db,
+    );
 
     return {
       accessToken,
@@ -66,7 +72,9 @@ export class TokenService {
    * Incluye detección de reúso: si llega un token que ya fue canjeado, se
    * asume que fue robado y se revoca la sesión completa del usuario.
    */
-  async rotate(refreshToken: string): Promise<{ user: User; tokens: TokenPair }> {
+  async rotate(
+    refreshToken: string,
+  ): Promise<{ user: User; tokens: TokenPair }> {
     const stored = await this.refreshTokenRepository.findByTokenHashWithUser(
       this.hashToken(refreshToken),
     );

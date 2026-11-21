@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { UsersModule } from '@Users';
+import { UsersController } from '@Users/controllers';
 import { AuthController } from '@Auth/controllers';
 import { AuthService, TokenService } from '@Auth/services';
 import { RefreshTokenRepository } from '@Auth/repositories';
@@ -23,7 +24,7 @@ import type { EnvConfig } from '@Config';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, UsersController],
   providers: [AuthService, TokenService, RefreshTokenRepository, JwtAuthGuard],
   // JwtAuthGuard se exporta para que app.module.ts pueda registrarlo como
   // APP_GUARD con sus dependencias (JwtService, UsersService) ya resueltas.
