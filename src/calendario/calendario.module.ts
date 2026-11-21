@@ -38,10 +38,13 @@ import { EstadisticasPartidoController } from './controllers/estadisticas-partid
 import { EstadisticasPartidoService } from './services/estadisticas-partido.service.js';
 import { CorreccionPartidoController } from './controllers/correccion-partido.controller.js';
 import { CorreccionPartidoService } from './services/correccion-partido.service.js';
+import { MesaPartidoController } from './controllers/mesa-partido.controller.js';
+import { MesaPartidoService } from './services/mesa-partido.service.js';
 
 @Module({
   imports: [AvisosModule, PosicionesModule],
   controllers: [
+    MesaPartidoController,
     CorreccionPartidoController,
     DetalleMarcadorController,
     ListadoPartidosController,
@@ -60,6 +63,7 @@ import { CorreccionPartidoService } from './services/correccion-partido.service.
     ConsultaCalendarioController,
   ],
   providers: [
+    MesaPartidoService,
     CorreccionPartidoService,
     DetalleMarcadorService,
     ListadoPartidosService,
