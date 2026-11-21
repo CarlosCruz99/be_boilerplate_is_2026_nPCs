@@ -29,9 +29,13 @@ export async function createApp() {
   );
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('SI Backend Boilerplate')
-    .setDescription('API REST con autenticación por usuario y contraseña.')
-    .setVersion('1.0')
+    .setTitle('nPCs — Plataforma de gestión deportiva (Liga amateur)')
+    .setDescription(
+      'API REST de nPCs para registro y validación de equipos, calendario, partidos, ' +
+        'marcadores, posiciones, estadísticas, cuotas, pagos, notificaciones, galería ' +
+        'y reportes. Los roles y la propiedad de los recursos se verifican en el servidor.',
+    )
+    .setVersion('1.0.0')
     .addBearerAuth()
     .build();
 
