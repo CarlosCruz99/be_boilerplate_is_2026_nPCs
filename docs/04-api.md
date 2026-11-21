@@ -1,11 +1,11 @@
-# API — contrato documentado a partir de `develop`
+# API REST — nPCs 1.0.0
 
-> **Alcance y fuente:** inventario de decoradores `@Controller`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@Public`, `@Roles`, `@ApiBearerAuth` y `@ApiTags` de los controladores del backend en `develop`, actualizado al commit `fbd2af922f64b6a127190972b8e8cb3f78e2e554` (merge del [PR #31](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/31), 20 de noviembre, hora de El Salvador). Es un inventario de rutas **en código**, no una certificación de que Swagger desplegado sea idéntico ni de que cada ruta funcione en producción.
+> **Fuente:** controladores, DTO y decoradores NestJS incluidos en la versión del backend integrada a `main` (`ec123e3`). La referencia OpenAPI del sistema es [Swagger](https://be-boilerplate-is-2026-npcs.onrender.com/api/docs).
 
 ## Swagger y convenciones
 
 - **Swagger local:** `http://localhost:3000/api/docs` (`SwaggerModule.setup('api/docs', ...)` en `src/create-app.ts`).
-- **Swagger producción:** `https://<URL-REAL-DEL-BACKEND>/api/docs` (**pendiente de confirmar**).
+- **Swagger producción:** `https://be-boilerplate-is-2026-npcs.onrender.com/api/docs`.
 - **API base:** `/api/v1` por `app.setGlobalPrefix('api/v1')`.
 - **Excepción al prefijo:** `GET /uploads/jugadores/:archivo` se excluye explícitamente de `/api/v1`.
 - **Autenticación:** JWT Bearer (`Authorization: Bearer <access_token>`); los tokens se obtienen en login y se renuevan mediante refresh.
@@ -81,7 +81,7 @@ Cada ruta de esta tabla, salvo la excepción de descargas señalada, usa el pref
 - **Respuesta `200`:** objeto `{ partidoId, estado, local: { id, nombre }, visitante: { id, nombre }, golesLocal, golesVisitante, faltasLocal, faltasVisitante, inicioReal, finReal, participantes: { partidoId, local: [{ id, nombre }], visitante: [{ id, nombre }] } }`. Las cuatro cifras del marcador y las faltas son enteros entre 0 y 99; `inicioReal` y `finReal` son fechas ISO 8601 o `null`.
 - **Estados permitidos en consulta:** `PROGRAMADO`, `EN_CURSO`, `FINALIZADO` y `CANCELADO`. Esta consulta **no modifica** el partido y no reemplaza el GET público `/partidos/:partidoId/marcador`.
 - **Privacidad y consistencia:** las respuestas envían `Cache-Control: private, no-store` y `Vary: Authorization`; el servicio consulta con transacción `RepeatableRead`. Si cambia la asignación de árbitro, el anterior pierde acceso y el nuevo lo obtiene.
-- **Fuente:** `src/calendario/controllers/mesa-partido.controller.ts`, `src/calendario/dto/mesa-partido.dto.ts`, `src/calendario/services/mesa-partido.service.ts`, `test/mesa-partido.e2e-spec.ts` y [PR #31](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/31). El controlador incluye explícitamente anotaciones Swagger para `200`, `400`, `401`, `403` y `404`; la versión desplegada de OpenAPI aún debe verificarse.
+- **Fuente:** `src/calendario/controllers/mesa-partido.controller.ts`, `src/calendario/dto/mesa-partido.dto.ts`, `src/calendario/services/mesa-partido.service.ts`, `test/mesa-partido.e2e-spec.ts` y [PR #31](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/31). El controlador incluye explícitamente anotaciones Swagger para `200`, `400`, `401`, `403` y `404`; el endpoint queda registrado en la generación OpenAPI del código de `main`.
 
 ### 5. Tabla de posiciones (H7, H8)
 
@@ -148,16 +148,10 @@ Cada ruta de esta tabla, salvo la excepción de descargas señalada, usa el pref
 |---|---|---|---|
 | GET | `/` | Health check del API | Pública, bajo `/api/v1/` |
 
-## Coherencia y mantenimiento de Swagger
+## Swagger y generación del contrato
 
-El archivo **`src/create-app.ts` de `develop` aún anuncia «SI Backend Boilerplate»** y describe solo autenticación. Para cambiarlo se incluye en este paquete `backend/cambios-swagger/src/create-app.ts`, con reemplazo completo de ese archivo y metadatos de nPCs; no altera controladores ni lógica de negocio. En `develop`, los controladores ya utilizan `@ApiTags` y `@ApiOperation`; muchos también incluyen `@ApiBearerAuth`. La cobertura real de esquemas de respuesta, ejemplos, query strings y códigos de error **debe comprobarse contra OpenAPI generado**.
+La API publica su documentación mediante `SwaggerModule.setup('api/docs', ...)` en `src/create-app.ts`. La configuración de `main` identifica la aplicación como **nPCs — Plataforma de gestión deportiva (Liga amateur)** y registra autenticación Bearer. La documentación interactiva se consulta en [https://be-boilerplate-is-2026-npcs.onrender.com/api/docs](https://be-boilerplate-is-2026-npcs.onrender.com/api/docs).
 
-### Validación de Swagger antes de la release
+Las rutas y los modelos se generan a partir de los controladores y DTO de NestJS (`@ApiTags`, `@ApiOperation`, `@ApiBearerAuth`, `@ApiProperty` y decoradores de respuestas). El prefijo HTTP para los recursos de dominio es `/api/v1`; el archivo de Swagger se sirve en `/api/docs`.
 
-1. Ejecutar backend con migraciones y variables válidas; abrir `/api/docs` y `/api/docs-json`.
-2. Verificar que las operaciones de las tablas anteriores figuren en el JSON; comprobar `/api/v1` en las rutas y la excepción de fotos.
-3. Comparar cada `requestBody`, `parameters`, `responses` y `security` de OpenAPI con los DTO, guards y pruebas en `develop`. No inventar esquemas que no estén representados en los DTO.
-4. Probar con cada rol 200/201 en flujos permitidos y 400/401/403/404/409/422 en los escenarios descritos por cada historia.
-5. Comparar el mismo documento y comportamiento contra HTTPS en producción después de fusionar `release/1.0.0`.
-
-**Importante:** sin arrancar el backend y descargar `/api/docs-json`, la documentación puede estar actualizada en código sin haberse certificado el resultado generado. Este paquete deja una base trazable para terminar esa comprobación.
+La consulta operativa del árbitro `GET /api/v1/partidos/:partidoId/mesa` define respuestas `200`, `400`, `401`, `403` y `404`, y exige que el árbitro esté asignado al partido.

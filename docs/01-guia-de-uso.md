@@ -1,5 +1,7 @@
 # Guía de uso
 
+**Sitio web:** [nPCs](https://project-czgs9.vercel.app/login).
+
 ## Roles y permisos
 
 | Tipo de usuario | Capacidades |
@@ -60,4 +62,4 @@ Las capturas existentes en el frontend pueden incorporarse como evidencias sin r
 - [Árbitro: partido](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs/blob/develop/docs/evidence/matchday/arbitro--arbitro-partidos-1-1440.png) y [estadísticas](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs/blob/develop/docs/evidence/matchday/arbitro--arbitro-partidos-1-estadisticas-360.png).
 - [Marcador público](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs/blob/develop/docs/evidence/h6/detalle-1440.png), [posiciones](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs/blob/develop/docs/evidence/h7/publica-1440.png) y [galería móvil](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs/blob/develop/docs/evidence/nord/galeria-movil.png).
 
-En un repositorio privado, los enlaces a imágenes del otro repositorio requieren permiso de acceso. Para documentación totalmente independiente, copiar las capturas seleccionadas a `docs/img/` y actualizar los enlaces en el commit.
+Las capturas y evidencias de las interfaces están organizadas en el directorio `docs/evidence/` del repositorio frontend. El acceso de prueba comienza en [Inicio de sesión](https://project-czgs9.vercel.app/login).

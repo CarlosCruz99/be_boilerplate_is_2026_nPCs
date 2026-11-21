@@ -1,6 +1,6 @@
 # Modelo de datos
 
-Modelo consolidado de `prisma/schema.prisma` en `develop`; nombres SQL del proyecto. Diagrama resumido: las relaciones opcionales y tablas de auditoría se explican debajo.
+Modelo consolidado de `prisma/schema.prisma` en `main`; nombres SQL del proyecto. Diagrama resumido: las relaciones opcionales y tablas de auditoría se explican debajo.
 
 ```mermaid
 erDiagram
@@ -55,4 +55,4 @@ erDiagram
 - `posicion` se deriva de resultados FINALIZADO, sin edición manual.
 - Los pagos PENDIENTE reservan disponible pero no reducen saldo; solo VERIFICADO reduce saldo.
 - Montos con `Decimal(12,2)` y archivos de comprobantes privados.
-- Las restricciones de colisiones, unicidad funcional e índices adicionales deben consultarse en [migraciones](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/tree/develop/prisma/migrations), además del modelo ORM.
+- Las restricciones de colisiones, unicidad funcional e índices adicionales deben consultarse en [migraciones](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/tree/main/prisma/migrations), además del modelo ORM.

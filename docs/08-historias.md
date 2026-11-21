@@ -1,6 +1,6 @@
 # Historias por módulo
 
-Responsables tomados del documento de historias (06-11-2026); pueden diferir de la asignación actual de Jira. **Card Jira y estado** consultados directamente en el proyecto NPCS el 20-11-2026. **PR** comprobados en ambos repositorios de GitHub: los enlaces incluidos corresponden a pull requests fusionados en `develop`. El estado de Jira no certifica despliegue en `main` ni cumplimiento de pruebas de aceptación en producción.
+La tabla reúne las 25 historias de usuario, sus responsables de la especificación, sus tarjetas en Jira y los Pull Requests de implementación. Los estados son los que registra el tablero Jira en la consulta del 20 de noviembre de 2026; la inclusión del código en `main` se identifica con la [PR de release backend #33](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/33).
 
 ## Módulo 1. Inscripción de equipos y jugadores
 
@@ -79,8 +79,8 @@ Responsables tomados del documento de historias (06-11-2026); pueden diferir de 
 
 **Notas de trazabilidad:** se enlazan los PR principales de implementación identificados por historia, incluyendo PR de base de datos cuando es específico (por ejemplo, H7). Existen además PR compartidos de base de datos y mejoras de diseño que no se repiten por historia. H8 y H20 no tienen PR de frontend específico porque su alcance es de backend/base de datos según las tasks del documento. El PR frontend #3 de H2 fue fusionado en la rama de H1, y luego integrado en `develop` mediante el PR #4, que es el enlace consignado. El PR backend #9 de H15 no se fusionó; se incluye el PR #10 que sí fue fusionado.
 
-**Actualización H5 (20-11-2026, hora de El Salvador):** se fusionó a `develop` el [PR backend #31](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/31), que agregó `GET /api/v1/partidos/:partidoId/mesa` para el árbitro asignado. Este PR complementa el [PR backend #13](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/13), no lo reemplaza. La historia continúa con el estado reflejado en la consulta previa de Jira; el merge no certifica que esté desplegada.
+**H5 — Mesa del árbitro:** el [PR backend #31](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/31) incorpora la consulta `GET /api/v1/partidos/:partidoId/mesa` y forma parte de la integración del backend a `main`.
 
 **Correspondencia de títulos:** H5 figura en Jira como «Actualización de marcador de un partido» y en el documento de historias como «Registrar el resultado oficial de un partido». Ambos corresponden a [NPCS-46](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-46).
 
-**Cierre para la entrega:** verificar que cada historia figure en la versión `v1.0.0` de `main`, que funcione en producción y que cumpla los criterios de aceptación. Las historias en «Control de calidad» no se clasifican aquí como terminadas. Los estados podrán cambiar después de esta consulta.
+**Referencia de publicación:** la documentación de despliegue está en [06-despliegue](06-despliegue.md). Los estados de la tabla reflejan el flujo de Jira y no sustituyen las evidencias de implementación enlazadas.

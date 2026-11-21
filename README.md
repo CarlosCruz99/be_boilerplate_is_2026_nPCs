@@ -9,10 +9,10 @@ La plataforma permite gestionar temporadas, inscripciones y plantillas, calendar
 
 | Componente | URL |
 |---|---|
-| Frontend | **Pendiente de confirmar URL HTTPS pública** |
-| API / Swagger | **Pendiente de confirmar** (`https://<host-backend>/api/docs`) |
+| Frontend | [https://project-czgs9.vercel.app/login](https://project-czgs9.vercel.app/login) |
+| API / Swagger | [https://be-boilerplate-is-2026-npcs.onrender.com/api/docs](https://be-boilerplate-is-2026-npcs.onrender.com/api/docs) |
 
-> Las URLs de producción no están acreditadas por los archivos revisados; no confundir con `localhost`. Los usuarios de prueba y contraseñas se entregan **solo en Moodle**, no en Git.
+> La aplicación web se publica en Vercel y la API NestJS en Render. Las credenciales de prueba se entregan por el canal definido por la cátedra, no en Git.
 
 ## Integrantes
 
@@ -25,7 +25,7 @@ La plataforma permite gestionar temporadas, inscripciones y plantillas, calendar
 | Cristofer Enoc Melara Aldana | Documentación / Backend |
 | Edson Enrique Palacios Quinteros | Base de datos |
 
-Las responsabilidades por historia se detallan en [08-historias](docs/08-historias.md); la asignación final debe contrastarse con Jira.
+Las responsabilidades por historia y los enlaces a Jira están disponibles en [08-historias](docs/08-historias.md).
 
 ## Documentación
 
@@ -37,17 +37,17 @@ Las responsabilidades por historia se detallan en [08-historias](docs/08-histori
 6. [Despliegue](docs/06-despliegue.md)
 7. [Forma de trabajo](docs/07-forma-de-trabajo.md)
 8. [Historias por módulo](docs/08-historias.md)
-9. [Problemas conocidos y pendientes](docs/09-problemas-conocidos.md)
+9. [Limitaciones conocidas](docs/09-problemas-conocidos.md)
 
-**Repositorios:** [backend](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs) · [frontend](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs). La documentación completa queda en el backend; el README del frontend debe enlazar a esta sección.
+**Repositorios:** [backend](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs) · [frontend](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs). La documentación completa queda en el backend y el README del frontend enlaza a ella.
 
-**Estado de revisión:** Base documental preparada contra `develop` (20-11-2026). **No equivale a certificar `main`, la release ni el despliegue.**
+**Código de referencia del backend:** rama `main`, commit [`ec123e3`](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/commit/ec123e33697d5521b4ea82eba4cf3a6f1f7380db), integración de la versión 1.0.0.
 
 
 ## Criterio de fidelidad documental
 
-El contenido de estas páginas se preparó con base en la rama `develop` de ambos repositorios. La evidencia de rutas proviene de controladores y componentes, la de datos de `prisma/schema.prisma`, y la de comportamiento esperado de las historias aprobadas. **No se afirma que `main` o producción contengan todavía esta versión.** Las URLs reales y los estados de Jira y PR se completan al cerrar el despliegue.
+Esta documentación describe el backend publicado en `main`, la interfaz de la liga y los contratos declarados en el código. Acceso web: [https://project-czgs9.vercel.app/login](https://project-czgs9.vercel.app/login). API documentada: [https://be-boilerplate-is-2026-npcs.onrender.com/api/docs](https://be-boilerplate-is-2026-npcs.onrender.com/api/docs).
 
-## Actualización previa al primer release: H5
+## Mesa del árbitro (H5)
 
-La rama `develop` del backend, al commit `fbd2af922f64b6a127190972b8e8cb3f78e2e554`, incorpora la consulta operativa de la mesa del árbitro `GET /api/v1/partidos/:partidoId/mesa` ([PR #31](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/31)). La ruta es privada para el árbitro asignado y tiene contrato detallado en [04-api](docs/04-api.md). Este dato corresponde a `develop`, no constituye confirmación de publicación de `main` ni de Swagger en producción.
+La ruta protegida `GET /api/v1/partidos/:partidoId/mesa` permite al árbitro asignado consultar el estado operativo del partido. Fue incluida mediante el [PR backend #31](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/31) y forma parte del backend de `main`. El contrato se detalla en [04-api](docs/04-api.md).

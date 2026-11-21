@@ -1,35 +1,49 @@
-# Despliegue
+# Despliegue de nPCs
 
-## Estado de los ambientes
+## Accesos públicos
 
-| Componente | Plataforma | URL pública | Rama requerida |
-|---|---|---|---|
-| Frontend | **No verificada** | **Pendiente** | `main` |
-| Backend | **No verificada** | **Pendiente** | `main` |
-| Base PostgreSQL | **No verificada** | Privada | Migraciones de release |
-| Swagger | Backend en `/api/docs` | **Pendiente** | Misma versión que API desplegada |
+| Componente | Plataforma | Dirección |
+|---|---|---|
+| Frontend web | Vercel | [Aplicación nPCs](https://project-czgs9.vercel.app/login) |
+| API REST NestJS | Render | [`https://be-boilerplate-is-2026-npcs.onrender.com/api/v1`](https://be-boilerplate-is-2026-npcs.onrender.com/api/v1) |
+| Documentación API | Swagger UI sobre Render | [Swagger](https://be-boilerplate-is-2026-npcs.onrender.com/api/docs) |
+| Base de datos | PostgreSQL | Conexión privada, configurada por `DATABASE_URL` |
 
-No se hallaron URLs reales de producción en los insumos revisados; completar únicamente después de verificar HTTPS y acceso externo.
+El frontend utiliza Next.js y se comunica por HTTPS con el backend. NestJS ejecuta la lógica de negocio y utiliza Prisma para acceder a PostgreSQL. El servidor publica la documentación interactiva de la API en `/api/docs`.
 
-## Publicación según la guía docente
+## Publicación de la versión 1.0.0
 
-1. Fusionar historias completas en `develop` con PR aprobado, y validar pruebas de integración y aceptación.
-2. Crear `release/1.0.0` desde `develop` en **cada** repositorio.
-3. Ajustar metadatos de versión, documentación, configuración y pruebas de humo en release.
-4. Abrir y aprobar PR a `main`; fusionar la release también de vuelta a `develop`.
-5. Etiquetar el commit exacto desplegado como `v1.0.0` y registrar la release en GitHub.
-6. Desplegar backend, PostgreSQL y frontend; configurar HTTPS, CORS/URL API, migraciones, almacenamiento persistente y seed, y probar `/api/docs` públicamente.
-7. Corregir defectos en producción por `hotfix/<descripcion>` y publicar `v1.0.1` cuando aplique.
+La rama `main` del backend incluye la integración de release mediante [PR #33](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/33) (commit [`ec123e3`](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/commit/ec123e33697d5521b4ea82eba4cf3a6f1f7380db)). La rama `develop` se utiliza para integración y los cambios de release se revisan por Pull Request.
 
-## Variables de producción
+El procedimiento de publicación se basa en Git Flow: implementar en ramas de funcionalidad, integrar a `develop`, estabilizar la versión en `release/1.0.0` y fusionar la release aprobada hacia `main`. Las correcciones sobre una publicación se realizan mediante `hotfix/<descripcion>` y se reintegran a las ramas correspondientes.
 
-Definir en la plataforma de despliegue, **sin publicar sus valores**: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN_DAYS`, `NODE_ENV`, `PORT`, `BCRYPT_SALT_ROUNDS`, `UPLOADS_DIR`, `RESEND_API_KEY`, `H15_CORREO_REMITENTE`; frontend `API_URL`. Validar persistencia real para archivos privados y CORS del frontend.
+## Configuración del backend
 
-## Verificaciones obligatorias
+Las variables de entorno se configuran en el servicio, sin colocar sus valores en Git:
 
-- Las dos ramas `main` coinciden con los artefactos realmente desplegados; ambas tienen tag `v1.0.0`.
-- Swagger visible por HTTPS, con operaciones y autorizaciones correctas.
-- Script de datos semilla idempotente y usuario por cada rol; **credenciales solo en Moodle**.
-- Las fotografías y comprobantes sobreviven reinicios y son privados según rol.
-- Todos los roles pueden probar sus flujos y las historias pendientes se declaran.
-- Mantener disponible el sistema al menos hasta el 24-11-2026, según el formato de entrega.
+| Variable | Uso |
+|---|---|
+| `NODE_ENV`, `PORT` | Modo y puerto del servidor |
+| `DATABASE_URL` | Conexión de Prisma con PostgreSQL |
+| `JWT_SECRET`, `JWT_EXPIRES_IN` | Firma y duración de tokens de acceso |
+| `REFRESH_TOKEN_EXPIRES_IN_DAYS` | Caducidad de sesiones renovables |
+| `BCRYPT_SALT_ROUNDS` | Coste de hash de contraseñas |
+| `UPLOADS_DIR` | Directorio usado para archivos en la implementación local |
+| `RESEND_API_KEY`, `H15_CORREO_REMITENTE` | Entrega de correo de avisos H15, cuando se configura el par de variables |
+
+En el frontend, `API_URL` identifica el origen del backend. Su valor de producción corresponde a `https://be-boilerplate-is-2026-npcs.onrender.com`.
+
+## Base de datos y datos de demostración
+
+El backend incorpora migraciones versionadas en `prisma/migrations/` y scripts de carga en `prisma/seed.ts`. En entornos desplegados, `prisma migrate deploy` aplica las migraciones existentes sin recrear el esquema. El seed incluye cuentas por rol y ejemplos de temporadas, equipos, partidos, avisos, cuotas y pagos. Las credenciales de prueba se entregan por Moodle y no forman parte de esta documentación pública.
+
+## Archivos multimedia
+
+Los servicios de la API guardan referencias a fotografías, comprobantes y contenido de galería y aplican controles de acceso en las descargas privadas. En el proyecto original, `UPLOADS_DIR` permite definir el directorio de archivos; los volúmenes del `docker-compose.yml` cubren la persistencia del entorno local. En un servicio de contenedores sin disco persistente, la duración de archivos locales queda sujeta a la política del proveedor.
+
+## Recursos de consulta
+
+- [Interfaz web](https://project-czgs9.vercel.app/login)
+- [Swagger de producción](https://be-boilerplate-is-2026-npcs.onrender.com/api/docs)
+- [Repositorio backend](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs)
+- [Repositorio frontend](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs)

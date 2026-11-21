@@ -31,7 +31,7 @@ npm run db:seed
 npm run start:dev
 ```
 
-Los scripts especializados documentados en `develop` son `prisma/seed-calendario.ts`, `seed-consolidado.ts`, `seed-avisos.ts`, `seed-estadisticas.ts`, `seed-galeria.ts`; verificar su invocación efectiva y el orden de ejecución antes de usarlos con datos persistentes.
+Los scripts especializados se ubican en `prisma/` y se ejecutan en el orden definido por `prisma/seed.ts`.
 
 ## Frontend
 
@@ -76,13 +76,17 @@ npm test
 npm run build
 ```
 
-Las pruebas requieren variables de entorno y, cuando correspondan, base de pruebas aislada. Este documento no certifica ejecución exitosa de los comandos.
+Las pruebas de integración se ejecutan con una base de datos de pruebas aislada y variables de entorno válidas.
 
 
 ## Precisión sobre el `docker-compose.yml` actual
 
-El Compose revisado en el backend contiene **solo** `postgres` y `api`; el frontend se inicia desde su repositorio con `npm run dev`. Por ello, este procedimiento usa Docker Compose para el backend y la base, y un proceso separado para Next.js. Para exigir un único `docker compose up` que incluya las tres capas, primero habrá que añadir el servicio frontend a un Compose integrado; no se documenta como disponible todavía.
+El Compose revisado en el backend contiene **solo** `postgres` y `api`; el frontend se inicia desde su repositorio con `npm run dev`. Por ello, este procedimiento usa Docker Compose para el backend y la base, y un proceso separado para Next.js. El desarrollo local utiliza dos procesos: el Compose existente para API y PostgreSQL, y Next.js ejecutado desde el repositorio frontend.
 
 ## Preparación de datos semilla
 
-`prisma/seed.ts` y los archivos `prisma/seed-calendario.ts`, `prisma/seed-consolidado.ts`, `prisma/seed-estadisticas.ts`, `prisma/seed-avisos.ts`, `prisma/seed-galeria.ts` aparecen en `develop`. Hay que revisar la configuración de `prisma.config.ts` y el orden de ejecución de los scripts especializados, en lugar de asumir que `npm run db:seed` invoca automáticamente todos. Los datos de prueba se definen en las historias de la liga (Apertura 2026, Clausura 2027 y Clausura 2025).
+`npm run db:seed` ejecuta `prisma/seed.ts`, que carga los usuarios y equipos, calendario, avisos, estadísticas, galería y datos consolidados mediante sus funciones de seed. Los registros demostrativos corresponden a Apertura 2026, Clausura 2027 y Clausura 2025.
+## Ambiente publicado
+
+- Frontend: [https://project-czgs9.vercel.app/login](https://project-czgs9.vercel.app/login).
+- Documentación de la API: [https://be-boilerplate-is-2026-npcs.onrender.com/api/docs](https://be-boilerplate-is-2026-npcs.onrender.com/api/docs).

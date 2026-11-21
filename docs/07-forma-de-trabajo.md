@@ -1,6 +1,6 @@
 # Forma de trabajo
 
-**Proyecto Jira:** [nPCs](https://uca-team-zec8wzmz.atlassian.net/browse/NPCS-10) (referencia a H2; enlazar aquí el tablero completo cuando se compruebe la URL).
+**Proyecto Jira:** [nPCs — issues](https://uca-team-zec8wzmz.atlassian.net/issues/?jql=project%20%3D%20NPCS).
 
 ## Ramas Git Flow
 
@@ -22,4 +22,4 @@ Usar `<tipo>(<ID>): <descripción>`, por ejemplo `feat(H2): validar inscripcione
 - [Repositorio backend](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs)
 - [Repositorio frontend](https://github.com/CarlosCruz99/fe_boilerplate_is_2026_nPCs)
 
-El enlace exacto al tablero y los PR individuales deben verificarse en Jira/GitHub al cerrar `08-historias.md`.
+**Release del backend:** [PR #33 — release 1.0.0](https://github.com/CarlosCruz99/be_boilerplate_is_2026_nPCs/pull/33). Los PR por historia están enlazados en [08-historias](08-historias.md).
