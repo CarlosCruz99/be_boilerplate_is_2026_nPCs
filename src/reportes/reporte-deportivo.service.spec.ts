@@ -3,6 +3,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { PrismaService } from '@Prisma/services';
+import { ReporteDeportivoController } from './reporte-deportivo.controller.js';
 import { ReporteDeportivoService } from './reporte-deportivo.service.js';
 
 describe('ReporteDeportivoService', () => {
@@ -102,5 +103,48 @@ describe('ReporteDeportivoService', () => {
     db.$queryRaw.mockRejectedValue(new Error('fallo SQL'));
 
     await expect(servicio.consultar(1)).rejects.toThrow('fallo SQL');
+  });
+
+  it('H22 AC3: refleja resultados oficiales nuevos o corregidos en la consulta siguiente sin caché', async () => {
+    const { servicio, db } = escenario();
+    db.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          totalPartidos: 2,
+          totalGoles: 3,
+          totalTarjetas: 1,
+          totalAsistencias: 2,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          totalPartidos: 3,
+          totalGoles: 6,
+          totalTarjetas: 2,
+          totalAsistencias: 4,
+        },
+      ]);
+
+    const primero = await servicio.consultar(1);
+    const segundo = await servicio.consultar(1);
+
+    expect(primero).toMatchObject({ totalPartidos: 2, totalGoles: 3 });
+    expect(segundo).toMatchObject({ totalPartidos: 3, totalGoles: 6 });
+
+    const consultarHandler = (
+      Object.getOwnPropertyDescriptor(
+        ReporteDeportivoController.prototype,
+        'consultar',
+      ) as { value: object }
+    ).value;
+    const headers = Reflect.getMetadata(
+      '__headers__',
+      consultarHandler,
+    ) as Array<{ name: string; value: string }>;
+    expect(headers).toEqual(
+      expect.arrayContaining([
+        { name: 'Cache-Control', value: 'private, no-store' },
+      ]),
+    );
   });
 });
